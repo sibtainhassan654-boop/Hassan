@@ -1,0 +1,555 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Documentary Overlays</title>
+<style>
+@font-face{font-family:Oswald;font-weight:400;src:url(node_modules/@fontsource/oswald/files/oswald-latin-400-normal.woff2)}
+@font-face{font-family:Oswald;font-weight:700;src:url(node_modules/@fontsource/oswald/files/oswald-latin-700-normal.woff2)}
+@font-face{font-family:Cinzel;font-weight:700;src:url(node_modules/@fontsource/cinzel/files/cinzel-latin-700-normal.woff2)}
+@font-face{font-family:Typewriter;src:url(node_modules/@fontsource/special-elite/files/special-elite-latin-400-normal.woff2)}
+@font-face{font-family:Marker;src:url(node_modules/@fontsource/permanent-marker/files/permanent-marker-latin-400-normal.woff2)}
+@font-face{font-family:Garamond;font-style:italic;src:url(node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-400-italic.woff2)}
+@font-face{font-family:Garamond;font-style:normal;src:url(node_modules/@fontsource/eb-garamond/files/eb-garamond-latin-400-normal.woff2)}
+html,body{margin:0;background:transparent}
+canvas{display:block}
+</style>
+<script src="node_modules/d3-array/dist/d3-array.min.js"></script>
+<script src="node_modules/d3-geo/dist/d3-geo.min.js"></script>
+<script src="node_modules/topojson-client/dist/topojson-client.min.js"></script>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+// =====================================================================
+//  Overlay graphics for the documentary-style edit.
+//  renderAt(t) draws everything for time t (seconds of the ORIGINAL video)
+//  and returns true if anything was drawn on that frame.
+//  Layout rule: the original video has burned-in captions at y≈1320–1600,
+//  so all graphics stay in the top part of the frame.
+// =====================================================================
+const W = 1080, H = 1920, END = 106.25, TOTAL = 109.75;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+
+// ---------- small math helpers ----------
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const eo = x => 1 - Math.pow(1 - x, 3);                         // ease out
+const eio = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const back = x => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const lerp = (a, b, k) => a + (b - a) * k;
+function rng(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+
+const C = { yellow: '#ffc928', red: '#d7261e', ink: '#2b2118', paper: '#efe3c8', white: '#fffaf0' };
+
+// ---------- paper texture (made once) ----------
+const tex = document.createElement('canvas'); tex.width = tex.height = 512;
+(() => {
+  const g = tex.getContext('2d'), r = rng(42);
+  g.fillStyle = '#fff'; g.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(90,60,25,${r() * .12})`; g.fillRect(r() * 512, r() * 512, 1 + r() * 2, 1 + r() * 2); }
+  for (let i = 0; i < 160; i++) { g.strokeStyle = `rgba(110,80,40,${r() * .08})`; g.lineWidth = r() * 1.5;
+    g.beginPath(); const x = r() * 512, y = r() * 512; g.moveTo(x, y); g.quadraticCurveTo(x + r() * 60 - 30, y + r() * 60 - 30, x + r() * 90 - 45, y + r() * 90 - 45); g.stroke(); }
+  for (let i = 0; i < 25; i++) { const x = r() * 512, y = r() * 512, rad = 20 + r() * 70;
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, `rgba(150,110,50,${r() * .07})`); gr.addColorStop(1, 'rgba(150,110,50,0)');
+    g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
+})();
+const texPat = ctx.createPattern(tex, 'repeat');
+
+// ---------- drawing building blocks ----------
+function tornPath(x, y, w, h, seed, rough = 7) {
+  const r = rng(seed), p = new Path2D(), st = 12, j = () => (r() - .5) * rough;
+  p.moveTo(x, y);
+  for (let i = st; i <= w; i += st) p.lineTo(x + i, y + j());
+  for (let i = st; i <= h; i += st) p.lineTo(x + w + j(), y + i);
+  for (let i = w - st; i >= 0; i -= st) p.lineTo(x + i, y + h + j());
+  for (let i = h - st; i >= 0; i -= st) p.lineTo(x + j(), y + i);
+  p.closePath(); return p;
+}
+function paper(x, y, w, h, seed, color = C.paper) {
+  const p = tornPath(x, y, w, h, seed);
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 34; ctx.shadowOffsetY = 14;
+  ctx.fillStyle = color; ctx.fill(p); ctx.restore();
+  ctx.save(); ctx.clip(p); ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = texPat; ctx.fillRect(x, y, w, h);
+  const gr = ctx.createRadialGradient(x + w / 2, y + h / 2, Math.min(w, h) * .3, x + w / 2, y + h / 2, Math.max(w, h) * .75);
+  gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(140,95,40,.45)');
+  ctx.fillStyle = gr; ctx.fillRect(x, y, w, h); ctx.restore();
+  return p;
+}
+function tape(x, y, rot, w = 150) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+  ctx.fillStyle = 'rgba(235,225,190,.72)'; ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 6;
+  ctx.fillRect(-w / 2, -22, w, 44);
+  ctx.restore();
+}
+// card entrance / exit transform (slides up with a small twist, fades out)
+function cardIn(t, a, b, cx, cy, baseRot = -.015) {
+  const k = eo(prog(t, a, a + .45)), o = prog(t, b - .3, b);
+  ctx.globalAlpha = clamp(k * 1.4) * (1 - o);
+  ctx.translate(cx, cy + (1 - k) * 140 - o * 40);
+  ctx.rotate(baseRot + (1 - k) * .09);
+  ctx.translate(-cx, -cy);
+}
+function textS(txt, x, y, font, color, align = 'center', stroke = 0, shadow = true) {
+  ctx.font = font; ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
+  if (shadow) { ctx.shadowColor = 'rgba(0,0,0,.75)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 5; }
+  if (stroke) { ctx.lineWidth = stroke; ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.lineJoin = 'round'; ctx.strokeText(txt, x, y); }
+  ctx.fillStyle = color; ctx.fillText(txt, x, y);
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+}
+function typed(txt, k) { return txt.slice(0, Math.round(txt.length * clamp(k))); }
+function topShade(alpha, to = 1000) {
+  const g = ctx.createLinearGradient(0, 0, 0, to);
+  g.addColorStop(0, `rgba(0,0,0,${alpha})`); g.addColorStop(.6, `rgba(0,0,0,${alpha * .55})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, to);
+}
+// hand-drawn marker shapes (k = how much has been drawn, 0..1)
+function markerPath(pts, k, color = C.red, width = 10) {
+  const n = Math.max(2, Math.floor(pts.length * clamp(k)));
+  if (k <= 0) return;
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < n; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.stroke(); ctx.restore();
+}
+function ellipsePts(cx, cy, rx, ry, seed) {
+  const r = rng(seed), pts = [], a0 = -2.2;
+  for (let i = 0; i <= 80; i++) { const a = a0 + i / 80 * Math.PI * 2.18, w = 1 + (r() - .5) * .05 + i / 80 * .07;
+    pts.push([cx + Math.cos(a) * rx * w, cy + Math.sin(a) * ry * w]); }
+  return pts;
+}
+function linePts(x1, y1, x2, y2, bend = 0, n = 30) {
+  const pts = [];
+  for (let i = 0; i <= n; i++) { const k = i / n, mx = (x1 + x2) / 2 - (y2 - y1) * bend, my = (y1 + y2) / 2 + (x2 - x1) * bend;
+    pts.push([(1 - k) * (1 - k) * x1 + 2 * (1 - k) * k * mx + k * k * x2, (1 - k) * (1 - k) * y1 + 2 * (1 - k) * k * my + k * k * y2]); }
+  return pts;
+}
+function arrow(x1, y1, x2, y2, bend, k, color = C.red) {
+  const pts = linePts(x1, y1, x2, y2, bend);
+  markerPath(pts, k, color, 8);
+  if (k >= 1) { const [ax, ay] = pts[pts.length - 2], ang = Math.atan2(y2 - ay, x2 - ax);
+    markerPath([[x2 - 34 * Math.cos(ang - .5), y2 - 34 * Math.sin(ang - .5)], [x2, y2], [x2 - 34 * Math.cos(ang + .5), y2 - 34 * Math.sin(ang + .5)]], 1, color, 8); }
+}
+function stamp(txt, x, y, rot, t0, t, size = 120, color = C.red) {
+  if (t < t0) return;
+  const k = prog(t, t0, t0 + .13), s = lerp(2.3, 1, eo(k));
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s); ctx.globalAlpha *= clamp(k * 2);
+  ctx.font = `700 ${size}px Oswald`; const w = ctx.measureText(txt).width + 70, h = size * 1.25;
+  ctx.strokeStyle = color; ctx.lineWidth = 12; ctx.strokeRect(-w / 2, -h / 2, w, h);
+  ctx.lineWidth = 4; ctx.strokeRect(-w / 2 + 14, -h / 2 + 14, w - 28, h - 28);
+  ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, 0, 6);
+  // worn-ink look: punch tiny holes
+  ctx.globalCompositeOperation = 'destination-out'; const r = rng(7);
+  for (let i = 0; i < 260; i++) { ctx.globalAlpha = r() * .8; ctx.fillRect(-w / 2 + r() * w, -h / 2 + r() * h, 2 + r() * 5, 2 + r() * 4); }
+  ctx.restore();
+}
+
+// ---------- map ----------
+let world = null, borders = null, countries = null;
+const geoPathFor = proj => d3.geoPath(proj, ctx);
+function mapCard(t, o) {
+  const { a, b } = o; if (t < a || t > b) return false;
+  const X = 90, Y = 160, Wd = 900, Ht = 720;
+  ctx.save(); cardIn(t, a, b, 540, Y + Ht / 2, -.012);
+  paper(X, Y, Wd, Ht, o.seed);
+  const IX = X + 30, IY = Y + 30, IW = Wd - 60, IH = Ht - 60;
+  ctx.save(); ctx.beginPath(); ctx.rect(IX, IY, IW, IH); ctx.clip();
+  // sea
+  ctx.fillStyle = '#b7c3b0'; ctx.fillRect(IX, IY, IW, IH);
+  // zoom: scale moves exponentially, centre moves linearly
+  const z = eio(prog(t, a + .25, a + o.zoomDur));
+  const s = o.from.s * Math.pow(o.to.s / o.from.s, z);
+  const c = [lerp(o.from.c[0], o.to.c[0], z), lerp(o.from.c[1], o.to.c[1], z)];
+  const proj = d3.geoMercator().scale(s).center(c).translate([IX + IW / 2, IY + IH / 2]);
+  const path = geoPathFor(proj);
+  ctx.beginPath(); path(d3.geoGraticule().step([5, 5])()); ctx.strokeStyle = 'rgba(60,70,60,.18)'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.beginPath(); path(world); ctx.fillStyle = '#dccaa0'; ctx.fill();
+  const hk = eo(prog(t, a + o.zoomDur - .5, a + o.zoomDur + .2));
+  if (hk > 0) { const f = countries.features.find(d => d.id === o.highlight);
+    ctx.beginPath(); path(f); ctx.fillStyle = `rgba(200,45,35,${.45 * hk})`; ctx.fill(); }
+  ctx.beginPath(); path(borders); ctx.strokeStyle = 'rgba(80,60,35,.75)'; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.beginPath(); path(world); ctx.strokeStyle = 'rgba(60,45,25,.85)'; ctx.lineWidth = 2.2; ctx.stroke();
+  // country names
+  ctx.font = '26px Typewriter'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(55,40,25,.8)';
+  for (const [name, lon, lat] of o.names) { const [x, y] = proj([lon, lat]); ctx.fillText(name, x, y); }
+  // paper texture over the map too
+  ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha *= .6; ctx.fillStyle = texPat; ctx.fillRect(IX, IY, IW, IH);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(60,45,25,.6)'; ctx.lineWidth = 3; ctx.strokeRect(IX, IY, IW, IH);
+  // pin
+  const pk = prog(t, a + o.zoomDur - .1, a + o.zoomDur + .25);
+  if (pk > 0) {
+    const [px, py] = proj(o.pin);
+    const pulse = ((t - a) * 1.4) % 1;
+    ctx.strokeStyle = `rgba(215,38,30,${(1 - pulse) * .9})`; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(px, py, 14 + pulse * 46, 0, 7); ctx.stroke();
+    const py2 = py - (1 - eo(pk)) * 80;
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4;
+    ctx.fillStyle = C.red; ctx.beginPath(); ctx.arc(px, py2 - 38, 22, Math.PI * .85, Math.PI * .15); ctx.lineTo(px, py2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(px, py2 - 40, 8, 0, 7); ctx.fill(); ctx.restore();
+  }
+  // label tag (typewriter)
+  const lk = prog(t, a + o.zoomDur + .1, a + o.zoomDur + .9);
+  if (lk > 0) {
+    const l1 = typed(o.label, lk), l2 = typed(o.sub, prog(t, a + o.zoomDur + .5, a + o.zoomDur + 1.3));
+    ctx.font = '44px Typewriter'; const w1 = ctx.measureText(o.label).width; ctx.font = '30px Typewriter';
+    const bw = Math.max(w1, ctx.measureText(o.sub).width) + 50;
+    const bx = X + 40, by = Y + Ht - 165;
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 14; ctx.fillStyle = 'rgba(28,22,16,.92)';
+    ctx.fillRect(bx, by, bw * clamp(lk * 3), 120); ctx.restore();
+    textS(l1, bx + 25, by + 54, '44px Typewriter', C.white, 'left', 0, false);
+    textS(l2, bx + 25, by + 98, '30px Typewriter', C.yellow, 'left', 0, false);
+  }
+  tape(X + 120, Y + 6, -.12); tape(X + Wd - 120, Y + 6, .1);
+  if (o.stamp) stamp(o.stamp.txt, X + Wd - 230, Y + 150, .14, o.stamp.t, t, 60);
+  ctx.restore();
+  return true;
+}
+
+// ---------- big "Zack style" stat ----------
+function bigStat(t, a, b, o) {
+  if (t < a || t > b) return false;
+  const k = prog(t, a, a + .35), out = prog(t, b - .25, b);
+  ctx.save(); ctx.globalAlpha = 1 - out;
+  topShade(.72 * clamp(k * 2), 1050);
+  const s = back(k) * (1 - out * .1);
+  ctx.translate(540, o.y); ctx.scale(s, s); ctx.translate(-540, -o.y);
+  if (o.pre) textS(o.pre, 540, o.y - 175, '700 58px Oswald', C.white, 'center', 8);
+  const v = o.to * eo(prog(t, a + .1, a + .1 + (o.countDur || 1.1)));
+  const num = (o.fmt || (x => Math.round(x).toString()))(v);
+  ctx.font = `700 ${o.size || 210}px Oswald`; const nw = ctx.measureText(num).width;
+  ctx.font = `700 ${(o.size || 210) * .55}px Oswald`; const uw = ctx.measureText(' ' + o.unit).width;
+  const x0 = 540 - (nw + uw) / 2;
+  textS(num, x0, o.y, `700 ${o.size || 210}px Oswald`, C.white, 'left', 14);
+  textS(' ' + o.unit, x0 + nw, o.y, `700 ${(o.size || 210) * .55}px Oswald`, C.yellow, 'left', 10);
+  const sk = prog(t, a + .6, a + 1.1);
+  if (o.sub && sk > 0) { ctx.globalAlpha = (1 - out) * sk; textS(o.sub, 540, o.y + 95, 'italic 52px Garamond', C.white, 'center', 6); }
+  ctx.restore(); return true;
+}
+
+// ---------- chapter card ----------
+function chapter(t, a, b, small, big) {
+  if (t < a || t > b) return false;
+  const k = eo(prog(t, a, a + .5)), out = prog(t, b - .35, b);
+  ctx.save(); ctx.globalAlpha = 1 - out;
+  ctx.fillStyle = `rgba(8,6,4,${.82 * k})`; ctx.fillRect(0, 300, W, 300);
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 300, W, 300); ctx.clip();
+  ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha *= .0; ctx.restore();
+  const lw = 380 * k;
+  ctx.strokeStyle = C.yellow; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(540 - 60 - lw, 372); ctx.lineTo(540 - 200, 372); ctx.moveTo(540 + 200, 372); ctx.lineTo(540 + 60 + lw, 372);
+  if (lw > 140) ctx.stroke();
+  textS(typed(small, prog(t, a + .1, a + .6)), 540, 385, '38px Typewriter', C.yellow, 'center', 0, false);
+  const bk = eo(prog(t, a + .35, a + .9));
+  ctx.globalAlpha = (1 - out) * bk;
+  ctx.save(); ctx.translate(0, (1 - bk) * 30);
+  ctx.font = '700 104px Cinzel'; textS(big, 540, 525, '700 104px Cinzel', C.white, 'center', 0, true); ctx.restore();
+  ctx.restore(); return true;
+}
+
+// =====================================================================
+//  TIMELINE — every graphic, with its start/end time in seconds
+// =====================================================================
+function renderAt(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.clearRect(0, 0, W, H);
+  let drew = false;
+
+  // 0.2–3.0  "there's a book in Sweden…"  → map zooms to Stockholm
+  drew |= mapCard(t, { a: .15, b: 3.0, seed: 11, zoomDur: 1.15,
+    from: { c: [12, 55], s: 650 }, to: { c: [16.5, 60.2], s: 1750 }, highlight: '752', pin: [18.07, 59.33],
+    label: 'STOCKHOLM, SWEDEN', sub: 'National Library of Sweden',
+    names: [['SWEDEN', 15.2, 63.5], ['NORWAY', 9.5, 61.6], ['FINLAND', 25.5, 62.6], ['DENMARK', 9.3, 56.0], ['GERMANY', 10.4, 51.2], ['POLAND', 19.4, 52.1]] });
+
+  // 3.1–5.75  "two people to lift it"  → weight counter
+  drew |= bigStat(t, 3.1, 5.75, { y: 520, pre: 'IT WEIGHS', to: 74.8, unit: 'KG', fmt: v => v.toFixed(1), sub: 'about as much as a grown man' });
+
+  // 6.35–8.45 "nearly a meter tall"  → measuring ruler
+  if (t >= 6.35 && t <= 8.45) { drew = true;
+    const k = eo(prog(t, 6.35, 7.0)), out = prog(t, 8.15, 8.45);
+    ctx.save(); ctx.globalAlpha = 1 - out;
+    topShade(.55, 900);
+    const top = 190, bot = 1250, x = 95, yTop = lerp(bot, top, k);
+    ctx.strokeStyle = C.yellow; ctx.lineWidth = 6; ctx.shadowColor = 'rgba(0,0,0,.7)'; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.moveTo(x, bot); ctx.lineTo(x, yTop); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 30, bot); ctx.lineTo(x + 30, bot); ctx.moveTo(x - 30, yTop); ctx.lineTo(x + 30, yTop); ctx.stroke();
+    ctx.lineWidth = 3; for (let y = bot; y > yTop; y -= 53) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + ((bot - y) / 53 % 5 === 0 ? 26 : 14), y); ctx.stroke(); }
+    ctx.shadowBlur = 0;
+    const lk = prog(t, 6.75, 7.1);
+    ctx.globalAlpha = (1 - out) * lk;
+    ctx.save(); ctx.translate(-(1 - eo(lk)) * 40, 0);
+    textS(Math.round(92 * k) + ' CM', 175, 330, '700 150px Oswald', C.white, 'left', 12);
+    textS('TALL', 175, 410, '700 66px Oswald', C.yellow, 'left', 9);
+    textS('50 cm wide  ·  22 cm thick', 178, 478, 'italic 46px Garamond', C.white, 'left', 6);
+    ctx.restore(); ctx.restore();
+  }
+
+  // 8.45–12.0 "skins of over 100 animals" → grid of hides
+  if (t >= 8.45 && t <= 12.0) { drew = true;
+    const X = 110, Y = 170, Wd = 860, Ht = 650;
+    ctx.save(); cardIn(t, 8.45, 12.0, 540, Y + Ht / 2, .012);
+    paper(X, Y, Wd, Ht, 23);
+    const n = Math.round(160 * eo(prog(t, 8.8, 11.0)));
+    textS('~' + n, X + 60, Y + 175, '700 150px Oswald', C.ink, 'left', 0, false);
+    textS('ANIMAL HIDES', X + 60, Y + 245, '700 54px Oswald', C.red, 'left', 0, false);
+    textS('turned into vellum pages', X + 62, Y + 300, 'italic 40px Garamond', C.ink, 'left', 0, false);
+    const cols = 16, gx = X + 60, gy = Y + 345, cw = (Wd - 120) / cols;
+    for (let i = 0; i < 160; i++) { const cx = gx + (i % cols) * cw, cy = gy + Math.floor(i / cols) * 26;
+      ctx.strokeStyle = 'rgba(60,40,20,.5)'; ctx.lineWidth = 1.5; ctx.strokeRect(cx + 4, cy, cw - 8, 20);
+      if (i < n) { ctx.fillStyle = i % 7 === 3 ? '#9a6b3a' : '#c49a64'; ctx.fillRect(cx + 4, cy, cw - 8, 20); } }
+    tape(X + Wd / 2, Y + 4, .04, 190);
+    ctx.restore();
+  }
+
+  // 13.8–15.95 "legend says … a single night" → LEGEND stamp
+  if (t >= 13.7 && t <= 15.95) { drew = true;
+    const out = prog(t, 15.65, 15.95);
+    ctx.save(); ctx.globalAlpha = 1 - out;
+    topShade(.6 * prog(t, 13.7, 14.2), 950);
+    stamp('LEGEND', 540, 440, -.16, 14.5, t, 150);
+    const k = prog(t, 14.85, 15.3);
+    ctx.globalAlpha = (1 - out) * k;
+    textS('“…written in a single night”', 540, 670, 'italic 64px Garamond', C.white, 'center', 7);
+    ctx.restore();
+  }
+
+  // 16.3–21.0 "It's called the Codex Gigas – the giant book" → title
+  if (t >= 16.3 && t <= 21.0) { drew = true;
+    const out = prog(t, 20.7, 21.0);
+    ctx.save(); ctx.globalAlpha = 1 - out;
+    topShade(.8 * eo(prog(t, 16.3, 16.8)), 1100);
+    const title = 'CODEX GIGAS'; ctx.font = '700 104px Cinzel';
+    const widths = [...title].map(ch => ctx.measureText(ch).width + 10); const tw = widths.reduce((s, v) => s + v, 0);
+    let x = 540 - tw / 2;
+    const grad = ctx.createLinearGradient(0, 380, 0, 520); grad.addColorStop(0, '#fbe3a1'); grad.addColorStop(.5, '#e2b358'); grad.addColorStop(1, '#a8741f');
+    [...title].forEach((ch, i) => {
+      const k = eo(prog(t, 17.35 + i * .045, 17.75 + i * .045));
+      ctx.save(); ctx.globalAlpha = (1 - out) * k; ctx.translate(x, 515 + (1 - k) * 50);
+      ctx.font = '700 104px Cinzel'; ctx.textAlign = 'left'; ctx.shadowColor = 'rgba(0,0,0,.8)'; ctx.shadowBlur = 24;
+      ctx.fillStyle = grad; ctx.fillText(ch, 0, 0); ctx.restore(); x += widths[i];
+    });
+    const lk = eio(prog(t, 18.0, 18.6));
+    ctx.strokeStyle = 'rgba(226,179,88,.9)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(540 - 380 * lk, 572); ctx.lineTo(540 + 380 * lk, 572); ctx.stroke();
+    const gk = prog(t, 19.0, 19.4);
+    ctx.globalAlpha = (1 - out) * gk;
+    ctx.save(); ctx.font = '400 50px Oswald'; ctx.letterSpacing = '16px'; textS('THE GIANT BOOK', 548, 650, '400 50px Oswald', C.white, 'center', 0); ctx.restore();
+    const mk = prog(t, 19.7, 20.3);
+    if (mk > 0) { ctx.globalAlpha = 1 - out; ctx.save(); ctx.beginPath(); ctx.rect(150, 680, 780 * mk, 140); ctx.clip();
+      ctx.translate(540, 760); ctx.rotate(-.04); textS("a.k.a. THE DEVIL'S BIBLE", 0, 0, '64px Marker', C.red, 'center', 0); ctx.restore(); }
+    ctx.restore();
+  }
+
+  // 21.0–25.75 "a monastery in Bohemia, ~800 years ago" → map 2
+  drew |= mapCard(t, { a: 21.0, b: 25.75, seed: 31, zoomDur: 1.9,
+    from: { c: [14, 54], s: 650 }, to: { c: [15.4, 49.9], s: 3600 }, highlight: '203', pin: [15.84, 49.86],
+    label: 'PODLAŽICE MONASTERY', sub: 'Bohemia  (today: Czech Republic)',
+    stamp: { txt: '~1229 AD', t: 23.75 },
+    names: [['GERMANY', 11.2, 51.0], ['POLAND', 17.6, 51.4], ['AUSTRIA', 14.6, 47.7], ['CZECHIA', 13.4, 50.35], ['SLOVAKIA', 19.4, 48.75]] });
+
+  // 26.4–34.1 "inside is an entire Bible…" → checklist note
+  if (t >= 26.4 && t <= 34.1) { drew = true;
+    const X = 130, Y = 180, Wd = 820, Ht = 640;
+    ctx.save(); cardIn(t, 26.4, 34.1, 540, Y + Ht / 2, -.02);
+    paper(X, Y, Wd, Ht, 47, '#f3ead6');
+    ctx.strokeStyle = 'rgba(70,110,170,.25)'; ctx.lineWidth = 2;
+    for (let y = Y + 200; y < Y + Ht - 20; y += 104) { ctx.beginPath(); ctx.moveTo(X + 20, y); ctx.lineTo(X + Wd - 20, y); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(200,60,60,.35)'; ctx.beginPath(); ctx.moveTo(X + 110, Y + 20); ctx.lineTo(X + 110, Y + Ht - 20); ctx.stroke();
+    textS(typed("WHAT'S INSIDE:", prog(t, 26.6, 27.3)), X + 140, Y + 120, '62px Typewriter', C.ink, 'left', 0, false);
+    const items = [['The entire Bible', 27.8], ['Histories', 29.15], ['Medical texts', 30.2], ['Spells against demons', 31.4]];
+    items.forEach(([txt, t0], i) => {
+      const y = Y + 185 + i * 104;
+      const ck = prog(t, t0 - .25, t0 + .05);
+      markerPath([[X + 40, y - 8], [X + 62, y + 14], [X + 100, y - 40]], ck, C.red, 9);
+      textS(typed(txt, prog(t, t0, t0 + .55)), X + 140, y, '54px Typewriter', C.ink, 'left', 0, false);
+    });
+    tape(X + 90, Y + 10, -.3); tape(X + Wd - 90, Y + 10, .25);
+    ctx.restore();
+  }
+
+  // 40.9–43.95 "not once across 600 pages" → page counter
+  drew |= bigStat(t, 40.9, 43.95, { y: 500, pre: 'ONE HANDWRITING', to: 620, unit: 'PAGES', countDur: 1.6, sub: 'and it never changes' });
+
+  // 44.7–51.0 "as if one man wrote every letter…" → marker circles
+  if (t >= 44.7 && t <= 51.0) { drew = true;
+    const out = prog(t, 50.7, 51.0);
+    ctx.save(); ctx.globalAlpha = 1 - out;
+    topShade(.5 * prog(t, 44.7, 45.2), 600);
+    textS(typed('SAME HAND', prog(t, 45.0, 45.4)), 540, 210, '86px Marker', C.white, 'center', 10);
+    markerPath(ellipsePts(230, 470, 170, 95, 3), prog(t, 45.5, 46.1));
+    arrow(400, 230, 270, 360, -.2, prog(t, 45.9, 46.25));
+    markerPath(ellipsePts(845, 560, 170, 95, 9), prog(t, 46.6, 47.2));
+    arrow(690, 230, 820, 450, .2, prog(t, 47.0, 47.35));
+    const k = prog(t, 48.0, 48.6);
+    if (k > 0) { ctx.save(); ctx.globalAlpha = (1 - out) * k; ctx.translate(540, 300); ctx.rotate(-.03);
+      textS('no fatigue · no bad days', 0, 0, '48px Marker', C.yellow, 'center', 8); ctx.restore(); }
+    ctx.restore();
+  }
+
+  // 54.6–60.3 "a full-page portrait of the devil, half a meter tall"
+  if (t >= 54.6 && t <= 60.3) { drew = true;
+    const out = prog(t, 60.0, 60.3);
+    ctx.save(); ctx.globalAlpha = 1 - out;
+    const tk = prog(t, 54.7, 55.4);
+    ctx.save(); ctx.fillStyle = `rgba(20,15,10,${.85 * clamp(tk * 3)})`; ctx.fillRect(60, 150, 470 * clamp(tk * 3), 120); ctx.restore();
+    textS(typed('FOLIO 290 RECTO', tk), 85, 205, '46px Typewriter', C.white, 'left', 0, false);
+    textS(typed('the devil portrait', prog(t, 55.2, 55.8)), 85, 250, '32px Typewriter', C.yellow, 'left', 0, false);
+    const bk = eo(prog(t, 57.1, 57.6));
+    if (bk > 0) {
+      const x = 1010, y1 = 330, y2 = lerp(330, 1240, bk);
+      markerPath([[x - 30, y1], [x, y1], [x, y2], [x - 30, y2]], 1, C.yellow, 8);
+      ctx.save(); ctx.globalAlpha = (1 - out) * prog(t, 57.5, 57.9); ctx.translate(965, 790); ctx.rotate(-Math.PI / 2);
+      textS('≈ 50 CM', 0, 0, '700 64px Oswald', C.yellow, 'center', 9); ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // 63.9–66.4 chapter II
+  drew |= chapter(t, 63.9, 66.4, 'CHAPTER II', 'THE LEGEND');
+
+  // 66.9–78.3 the monk's "case file"
+  if (t >= 66.9 && t <= 78.3) { drew = true;
+    const X = 110, Y = 180, Wd = 860, Ht = 600;
+    ctx.save(); cardIn(t, 66.9, 78.3, 540, Y + Ht / 2, .015);
+    paper(X, Y, Wd, Ht, 59, '#e9dcbc');
+    textS('CASE FILE', X + 50, Y + 95, '64px Typewriter', C.red, 'left', 0, false);
+    ctx.strokeStyle = 'rgba(43,33,24,.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X + 50, Y + 120); ctx.lineTo(X + Wd - 50, Y + 120); ctx.stroke();
+    const rows = [['MONK:', 'Herman "the Recluse"', 67.2], ['SENTENCE:', 'walled up alive', 67.9], ['THE DEAL:', 'a book of all knowledge', 70.2], ['DEADLINE:', 'ONE night', 72.6]];
+    rows.forEach(([k1, v, t0], i) => {
+      const y = Y + 200 + i * 88, k = prog(t, t0, t0 + .6);
+      if (k <= 0) return;
+      textS(typed(k1, k * 2), X + 50, y, '40px Typewriter', 'rgba(43,33,24,.7)', 'left', 0, false);
+      textS(typed(v, k), X + 300, y, '44px Typewriter', C.ink, 'left', 0, false);
+    });
+    markerPath(ellipsePts(X + 395, Y + 452, 120, 50, 21), prog(t, 73.3, 73.9), C.red, 7);
+    stamp('HELP?', X + Wd - 180, Y + 120, .2, 76.85, t, 60);
+    tape(X + Wd / 2, Y + 4, -.03, 200);
+    ctx.restore();
+  }
+
+  // 78.3–82.2 chapter III
+  drew |= chapter(t, 78.3, 82.2, 'CHAPTER III', 'THE REAL ANSWER');
+
+  // 82.3–87.2 "scholars estimate 20 to 30 years" → timeline bar
+  if (t >= 82.3 && t <= 87.2) { drew = true;
+    const k = prog(t, 82.3, 82.7), out = prog(t, 86.9, 87.2);
+    ctx.save(); ctx.globalAlpha = (1 - out) * k;
+    topShade(.75, 1000);
+    textS('ESTIMATED WRITING TIME', 540, 260, '700 50px Oswald', C.yellow, 'center', 8);
+    const fk = eio(prog(t, 83.0, 85.6)), yrs = 30 * fk;
+    textS(yrs < 20 ? Math.round(yrs) + ' YEARS' : '20–' + Math.round(yrs) + ' YEARS', 540, 430, '700 150px Oswald', C.white, 'center', 12);
+    const bx = 120, bw = 840, by = 490;
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(bx, by, bw, 44);
+    ctx.fillStyle = C.yellow; ctx.fillRect(bx, by, bw * Math.min(fk, 2 / 3), 44);
+    if (fk > 2 / 3) { ctx.save(); ctx.beginPath(); ctx.rect(bx + bw * 2 / 3, by, bw * (fk - 2 / 3), 44); ctx.clip();
+      for (let x = bx + bw * 2 / 3 - 40; x < bx + bw; x += 22) { ctx.fillStyle = 'rgba(255,201,40,.75)'; ctx.beginPath(); ctx.moveTo(x, by + 44); ctx.lineTo(x + 11, by + 44); ctx.lineTo(x + 55, by); ctx.lineTo(x + 44, by); ctx.fill(); }
+      ctx.restore(); }
+    ctx.font = '30px Typewriter'; ctx.fillStyle = C.white; ctx.textAlign = 'center';
+    [0, 10, 20, 30].forEach(v => ctx.fillText(v + ' yrs', bx + bw * v / 30, by + 90));
+    const lk = prog(t, 85.9, 86.3);
+    if (lk > 0) { ctx.globalAlpha = (1 - out) * lk; textS('LEGEND: 1 NIGHT', 540, 690, '700 64px Oswald', 'rgba(255,255,255,.75)', 'center', 8);
+      markerPath(linePts(330, 670, 760, 665, .02), prog(t, 86.25, 86.55), C.red, 10); }
+    ctx.restore();
+  }
+
+  // 87.5–93.4 "one man … one room … a single book"
+  if (t >= 87.5 && t <= 93.4) { drew = true;
+    const out = prog(t, 93.1, 93.4);
+    ctx.save(); ctx.globalAlpha = 1 - out;
+    topShade(.65 * prog(t, 87.5, 87.9), 900);
+    [['1', 'MAN', 87.8], ['1', 'ROOM', 89.0], ['1', 'BOOK', 92.45]].forEach(([n, w, t0], i) => {
+      const k = prog(t, t0, t0 + .22); if (k <= 0) return;
+      const s = back(k), y = 300 + i * 150;
+      ctx.save(); ctx.translate(540, y); ctx.scale(s, s);
+      ctx.font = '700 130px Oswald'; const nw = ctx.measureText(n + ' ').width, ww = ctx.measureText(w).width;
+      textS(n, -(nw + ww) / 2, 45, '700 130px Oswald', C.yellow, 'left', 12);
+      textS(w, -(nw + ww) / 2 + nw, 45, '700 130px Oswald', C.white, 'left', 12);
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+
+  // 98.2–102.7 "10 of its pages are missing"
+  if (t >= 98.2 && t <= 102.7) { drew = true;
+    const X = 110, Y = 170, Wd = 860, Ht = 680;
+    ctx.save(); cardIn(t, 98.2, 102.7, 540, Y + Ht / 2, -.01);
+    paper(X, Y, Wd, Ht, 71);
+    textS('10 PAGES MISSING', 540, Y + 115, '700 84px Oswald', C.ink, 'center', 0, false);
+    const missing = new Set([5, 6, 13, 14, 15, 16, 22, 23, 24, 25]);
+    const cols = 8, pw = 78, ph = 100, gx = 540 - (cols * (pw + 16)) / 2 + 8, gy = Y + 165;
+    for (let i = 0; i < 32; i++) {
+      const x = gx + (i % cols) * (pw + 16), y = gy + Math.floor(i / cols) * (ph + 16);
+      const show = prog(t, 98.5 + i * .02, 98.7 + i * .02);
+      ctx.save(); ctx.globalAlpha = show * ctx.globalAlpha;
+      if (missing.has(i) && t > 99.4) {
+        const mk = prog(t, 99.4 + [...missing].indexOf(i) * .08, 99.6 + [...missing].indexOf(i) * .08);
+        ctx.setLineDash([8, 8]); ctx.strokeStyle = C.red; ctx.lineWidth = 4; ctx.strokeRect(x, y, pw, ph); ctx.setLineDash([]);
+        ctx.fillStyle = `rgba(215,38,30,${mk})`; ctx.font = '700 60px Oswald'; ctx.textAlign = 'center'; ctx.fillText('?', x + pw / 2, y + 72);
+        ctx.fillStyle = `rgba(206,186,148,${1 - mk})`; ctx.fillRect(x, y, pw, ph);
+      } else {
+        ctx.fillStyle = '#cdb994'; ctx.fillRect(x, y, pw, ph);
+        ctx.strokeStyle = 'rgba(60,40,20,.35)'; ctx.lineWidth = 2;
+        for (let l = 0; l < 6; l++) { ctx.beginPath(); ctx.moveTo(x + 10, y + 18 + l * 13); ctx.lineTo(x + pw - 10, y + 18 + l * 13); ctx.stroke(); }
+      }
+      ctx.restore();
+    }
+    stamp('CONTENTS UNKNOWN', 540, Y + Ht - 70, -.05, 101.45, t, 56);
+    tape(X + 140, Y + 6, -.15); tape(X + Wd - 140, Y + 6, .12);
+    ctx.restore();
+  }
+
+  // 103.3–106.25 call to action
+  if (t >= 103.3 && t < END) { drew = true;
+    const k = prog(t, 103.3, 103.7), out = prog(t, 105.95, 106.25);
+    ctx.save(); ctx.globalAlpha = 1 - out;
+    topShade(.75 * k, 1000);
+    const s = back(k); ctx.translate(540, 380); ctx.scale(s, s); ctx.translate(-540, -380);
+    textS('WHAT DO YOU THINK', 540, 330, '700 92px Oswald', C.white, 'center', 12);
+    textS('HE LEFT OUT?', 540, 445, '700 120px Oswald', C.yellow, 'center', 14);
+    const ck = prog(t, 104.6, 105.0);
+    ctx.globalAlpha = (1 - out) * ck;
+    textS('tell me in the comments', 540, 560, '58px Marker', C.white, 'center', 8);
+    arrow(540, 600, 540, 760 + Math.sin(t * 8) * 10, .05, prog(t, 104.8, 105.1), C.yellow);
+    ctx.restore();
+  }
+
+  // 106.25–109.75 end card (fully opaque)
+  if (t >= END - .4) { drew = true;
+    const k = prog(t, END - .4, END + .2), fade = prog(t, TOTAL - .6, TOTAL);
+    ctx.save(); ctx.globalAlpha = k;
+    ctx.fillStyle = '#0d0a07'; ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = k * .06; ctx.fillStyle = texPat; ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'source-over';
+    const g = ctx.createRadialGradient(540, 860, 50, 540, 860, 900); g.addColorStop(0, 'rgba(255,170,60,.16)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = k; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const tk = eo(prog(t, END, END + .8));
+    ctx.globalAlpha = tk;
+    textS('THE DEVIL’S', 540, 790 - (1 - tk) * 30, '700 112px Cinzel', '#e9c27a', 'center', 0);
+    textS('BIBLE', 540, 920 - (1 - tk) * 30, '700 150px Cinzel', '#e9c27a', 'center', 0);
+    ctx.strokeStyle = 'rgba(233,194,122,.8)'; ctx.lineWidth = 3; const lw = 300 * eio(prog(t, END + .4, END + 1.1));
+    ctx.beginPath(); ctx.moveTo(540 - lw, 975); ctx.lineTo(540 + lw, 975); ctx.stroke();
+    ctx.globalAlpha = prog(t, END + .7, END + 1.2);
+    textS('Codex Gigas  ·  c. 1229  ·  now in Stockholm', 540, 1045, 'italic 48px Garamond', C.white, 'center', 0);
+    ctx.globalAlpha = prog(t, END + 1.3, END + 1.8);
+    textS('FOLLOW FOR MORE HISTORY MYSTERIES', 540, 1210, '700 50px Oswald', C.yellow, 'center', 0);
+    ctx.restore();
+    if (fade > 0) { ctx.fillStyle = `rgba(0,0,0,${fade})`; ctx.fillRect(0, 0, W, H); }
+  }
+  return !!drew;
+}
+
+window.renderAt = renderAt;
+window.ready = (async () => {
+  await Promise.all(['700 50px Oswald', '400 50px Oswald', '700 50px Cinzel', '50px Typewriter', '50px Marker', 'italic 50px Garamond'].map(f => document.fonts.load(f)));
+  const topo = await (await fetch('node_modules/world-atlas/countries-50m.json')).json();
+  countries = topojson.feature(topo, topo.objects.countries);
+  world = topojson.merge(topo, topo.objects.countries.geometries);
+  borders = topojson.mesh(topo, topo.objects.countries, (a, b) => a !== b);
+  return true;
+})();
+</script>
+</body>
+</html>
