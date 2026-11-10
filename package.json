@@ -1,0 +1,23 @@
+{
+  "name": "hassan",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sibtainhassan654-boop/Hassan.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sibtainhassan654-boop/Hassan/issues"
+  },
+  "homepage": "https://github.com/sibtainhassan654-boop/Hassan#readme",
+  "dependencies": {
+    "three": "^0.160.0"
+  }
+}

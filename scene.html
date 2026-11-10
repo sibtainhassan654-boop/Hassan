@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>3D Scene</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}</style>
+<script type="importmap">
+{ "imports": {
+  "three": "./node_modules/three/build/three.module.js",
+  "three/addons/": "./node_modules/three/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// ---------- 1. Setup: stage, camera, renderer ----------
+const W = 1280, H = 720;
+const TEXT = new URLSearchParams(location.search).get('text') || 'HASSAN';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H);
+renderer.setPixelRatio(1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05040f);
+scene.fog = new THREE.FogExp2(0x05040f, 0.035);
+
+const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 200);
+
+// ---------- 2. Lights ----------
+scene.add(new THREE.AmbientLight(0x404060, 0.6));
+const pink = new THREE.PointLight(0xff3ea5, 60, 40); pink.position.set(-6, 4, 6); scene.add(pink);
+const cyan = new THREE.PointLight(0x2ee6ff, 60, 40); cyan.position.set(6, -2, 6); scene.add(cyan);
+const key = new THREE.DirectionalLight(0xffffff, 1.2); key.position.set(0, 10, 10); scene.add(key);
+
+// ---------- 3. Objects ----------
+// Glowing torus knot in the middle
+const knot = new THREE.Mesh(
+  new THREE.TorusKnotGeometry(1.4, 0.42, 220, 32),
+  new THREE.MeshStandardMaterial({ color: 0x8a5cff, metalness: 0.8, roughness: 0.2, emissive: 0x2a0d66 })
+);
+scene.add(knot);
+
+// Rings around it
+const rings = [];
+for (let i = 0; i < 3; i++) {
+  const r = new THREE.Mesh(
+    new THREE.TorusGeometry(2.6 + i * 0.6, 0.03, 16, 200),
+    new THREE.MeshBasicMaterial({ color: [0xff3ea5, 0x2ee6ff, 0xffd166][i] })
+  );
+  scene.add(r); rings.push(r);
+}
+
+// Orbiting little cubes
+const cubes = [];
+for (let i = 0; i < 24; i++) {
+  const c = new THREE.Mesh(
+    new THREE.BoxGeometry(0.25, 0.25, 0.25),
+    new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(i / 24, 0.9, 0.6), emissive: new THREE.Color().setHSL(i / 24, 0.9, 0.25) })
+  );
+  scene.add(c); cubes.push(c);
+}
+
+// Star particles
+const starGeo = new THREE.BufferGeometry();
+const N = 3000, pos = new Float32Array(N * 3);
+let seed = 7; const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+for (let i = 0; i < N; i++) {
+  const r = 15 + rand() * 60, th = rand() * Math.PI * 2, ph = Math.acos(2 * rand() - 1);
+  pos[i*3] = r * Math.sin(ph) * Math.cos(th); pos[i*3+1] = r * Math.cos(ph); pos[i*3+2] = r * Math.sin(ph) * Math.sin(th);
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.12 }));
+scene.add(stars);
+
+// Reflective floor grid
+const grid = new THREE.GridHelper(80, 80, 0xff3ea5, 0x2a1a5e);
+grid.position.y = -3.5; scene.add(grid);
+
+// 3D text (loaded from a font file)
+let textMesh = null;
+const fontReady = new Promise(res => {
+  new FontLoader().load('./node_modules/three/examples/fonts/helvetiker_bold.typeface.json', font => {
+    const g = new TextGeometry(TEXT, { font, size: 1.1, height: 0.35, curveSegments: 10,
+      bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.04, bevelSegments: 4 });
+    g.center();
+    textMesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.6, roughness: 0.25, emissive: 0x331144 }));
+    textMesh.position.y = 3.6;
+    scene.add(textMesh);
+    res();
+  });
+});
+
+// ---------- 4. Glow (bloom) ----------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), 0.9, 0.5, 0.2));
+composer.addPass(new OutputPass());
+
+// ---------- 5. Animation: everything depends only on time t ----------
+const ease = x => x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3) / 2;
+function renderAt(t) {           // t in seconds, 0..DURATION
+  // Camera: fly in from far away, then orbit
+  const intro = ease(Math.min(t / 3, 1));
+  const radius = 30 - 19 * intro;
+  const angle = t * 0.45;
+  camera.position.set(Math.sin(angle) * radius, 1.5 + Math.sin(t * 0.6) * 1.2, Math.cos(angle) * radius);
+  camera.lookAt(0, 0.8, 0);
+
+  knot.rotation.set(t * 0.7, t * 0.9, 0);
+  knot.scale.setScalar(1 + Math.sin(t * 3) * 0.05);
+  rings.forEach((r, i) => { r.rotation.x = t * (0.5 + i * 0.3) + i; r.rotation.y = t * (0.3 + i * 0.2); });
+  cubes.forEach((c, i) => {
+    const a = (i / cubes.length) * Math.PI * 2 + t * 0.8;
+    const rr = 4.2 + Math.sin(t * 2 + i) * 0.3;
+    c.position.set(Math.cos(a) * rr, Math.sin(a * 2 + t) * 0.8, Math.sin(a) * rr);
+    c.rotation.set(t * 2 + i, t * 3 + i, 0);
+  });
+  stars.rotation.y = t * 0.02;
+  grid.position.z = (t * 2) % 1;
+
+  if (textMesh) {
+    const pop = ease(Math.min(Math.max((t - 2) / 1.5, 0), 1));   // text pops in after 2s
+    textMesh.scale.setScalar(Math.max(pop, 0.001));
+    textMesh.lookAt(camera.position.x, textMesh.position.y, camera.position.z);
+    textMesh.position.y = 3.6 + Math.sin(t * 2) * 0.15;
+  }
+  pink.position.x = Math.sin(t) * 7; cyan.position.x = -Math.sin(t) * 7;
+  composer.render();
+}
+
+window.renderAt = renderAt;
+window.ready = fontReady.then(() => true);
+
+// When opened normally in a browser: play live
+if (!navigator.webdriver) {
+  const start = performance.now();
+  (function loop() { renderAt((performance.now() - start) / 1000); requestAnimationFrame(loop); })();
+}
+</script>
+</body>
+</html>
