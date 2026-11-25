@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bill Banao Invoice Maker</title>
 <meta name="description" content="Free invoice maker for Pakistani freelancers. Bill clients in USD, GBP, EUR, AED or PKR, add Payoneer or bank details, see the PKR equivalent, and save as PDF. No sign-up.">
+<meta name="theme-color" content="#0b6e4f">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Bill Banao: free invoice maker for Pakistani freelancers">
+<meta property="og:description" content="Make a professional invoice in USD, GBP, EUR or PKR with Payoneer or bank details. Free, no sign-up.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%230b6e4f%27/%3E%3Cpath d=%27M20 14h24v36l-4-3-4 3-4-3-4 3-4-3-4 3z%27 fill=%27%23fff%27/%3E%3Cpath d=%27M26 24h12M26 31h12M26 38h8%27 stroke=%27%230b6e4f%27 stroke-width=%273%27 stroke-linecap=%27round%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
@@ -165,6 +170,15 @@
   @media (min-width: 480px) { .foot { grid-template-columns: 1fr 1fr; } }
   .stamp { display: inline-block; margin-top: 10px; padding: 3px 10px; border: 2px solid #0b6e4f; color: #0b6e4f; border-radius: 4px; font: 700 12px/1.4 var(--font-display); letter-spacing: .1em; transform: rotate(-3deg); }
 
+
+  .guide { padding-block: 8px 32px; border-top: 1px solid var(--line); }
+  .guide h2 { font: 700 clamp(20px, 3vw, 26px)/1.2 var(--font-display); margin: 24px 0 16px; letter-spacing: -.01em; text-wrap: balance; }
+  .guide-grid { display: grid; gap: 20px; }
+  @media (min-width: 640px) { .guide-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 980px) { .guide-grid { grid-template-columns: repeat(3, 1fr); } }
+  .guide h3 { font: 600 16px/1.3 var(--font-display); margin: 0 0 4px; }
+  .guide p { margin: 0; color: var(--muted); max-width: 60ch; }
+  footer.site a { color: var(--accent); }
   footer.site { padding-block: 0 40px; color: var(--muted); font-size: 13px; }
   footer.site p { margin: 0 0 6px; max-width: 75ch; }
 
@@ -173,7 +187,7 @@
   @media print {
     @page { margin: 14mm; }
     body { background: #fff; }
-    .top, .form, .sheet-label, footer.site, .notice { display: none !important; }
+    .top, .form, .sheet-label, .guide, footer.site, .notice { display: none !important; }
     .desk { display: block; padding: 0; }
     .sheet-wrap { position: static; }
     .sheet { box-shadow: none; padding: 0; color: #000; }
@@ -331,9 +345,41 @@
     </section>
   </main>
 
+
+  <section class="guide" aria-labelledby="guideTitle">
+    <h2 id="guideTitle">How to invoice a foreign client from Pakistan</h2>
+    <div class="guide-grid">
+      <div>
+        <h3>1. Fill in both names</h3>
+        <p>Your name or business name, and your client's company name exactly as they use it. Many companies only pay invoices that show their correct legal name.</p>
+      </div>
+      <div>
+        <h3>2. Bill in the client's currency</h3>
+        <p>A UK client expects GBP and a US client expects USD. It makes paying easy for them, and you get paid faster.</p>
+      </div>
+      <div>
+        <h3>3. List the work clearly</h3>
+        <p>Write one line per task, with quantity and rate. "Logo design, 3 concepts" is clearer than "design work" and leads to fewer questions.</p>
+      </div>
+      <div>
+        <h3>4. Say how to pay</h3>
+        <p>Add your Payoneer email or receiving account, or your bank name and IBAN. Double-check every digit before you send it.</p>
+      </div>
+      <div>
+        <h3>5. Set a due date</h3>
+        <p>"Net 15" means the client should pay within 15 days of the issue date. Agree on terms before you start the work.</p>
+      </div>
+      <div>
+        <h3>6. Keep a record</h3>
+        <p>Save every invoice as a PDF and keep it with the payment receipt. It helps with your bank, your taxes and any dispute.</p>
+      </div>
+    </div>
+  </section>
+
   <footer class="site">
     <p>Your invoices are saved only in this browser on this device. Nothing is uploaded anywhere.</p>
     <p>This tool doesn't give tax advice. Ask your bank or a tax advisor about the rules for remittances and freelance income.</p>
+    <p><a href="privacy.html">Privacy</a> · Made in Pakistan for freelancers everywhere.</p>
   </footer>
 </div>
 
