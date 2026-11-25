@@ -2,351 +2,572 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Revenue Reality Lab</title>
-<meta name="description" content="An interactive calculator that shows what any monthly revenue goal really takes, from your first $1,000 to the mythical $1 trillion.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bill Banao Invoice Maker</title>
+<meta name="description" content="Free invoice maker for Pakistani freelancers. Bill clients in USD, GBP, EUR, AED or PKR, add Payoneer or bank details, see the PKR equivalent, and save as PDF. No sign-up.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
 <style>
+  /* Layout: a work desk. Form on the left, a sheet of invoice paper on the right that updates as you type. */
   :root {
-    --bg: #f7f6f2;
-    --surface: #ffffff;
-    --surface-2: #efede6;
-    --text: #1c1b18;
-    --muted: #5f5c54;
-    --border: #dcd8cc;
-    --accent: #1f6f5c;
-    --accent-soft: #d8ece5;
-    --warn: #a14a12;
-    --warn-soft: #f6e3d3;
-    --bar: #1f6f5c;
-    --radius: 14px;
+    --bg: #eef1ee;
+    --panel: #ffffff;
+    --field: #f5f7f5;
+    --ink: #17201b;
+    --muted: #5b675f;
+    --line: #d5dcd6;
+    --accent: #0b6e4f;
+    --accent-ink: #ffffff;
+    --accent-soft: #dcefe6;
+    --paper: #ffffff;
+    --paper-ink: #17201b;
+    --paper-muted: #66716a;
+    --paper-line: #e2e7e3;
+    --danger: #b3261e;
+    --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --radius: 12px;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #121412;
-      --surface: #1b1e1c;
-      --surface-2: #232724;
-      --text: #ecebe6;
-      --muted: #a5a39b;
-      --border: #333833;
-      --accent: #5cc4a6;
-      --accent-soft: #1d3a31;
-      --warn: #f0a46b;
-      --warn-soft: #3a2618;
-      --bar: #5cc4a6;
+      --bg: #101512;
+      --panel: #18201b;
+      --field: #1f2923;
+      --ink: #e7ece8;
+      --muted: #9aa69e;
+      --line: #2e3a33;
+      --accent: #4cc596;
+      --accent-ink: #0b1a13;
+      --accent-soft: #183a2c;
+      --danger: #f2948c;
+      color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #121412;
-    --surface: #1b1e1c;
-    --surface-2: #232724;
-    --text: #ecebe6;
-    --muted: #a5a39b;
-    --border: #333833;
-    --accent: #5cc4a6;
-    --accent-soft: #1d3a31;
-    --warn: #f0a46b;
-    --warn-soft: #3a2618;
-    --bar: #5cc4a6;
+    --bg: #101512;
+    --panel: #18201b;
+    --field: #1f2923;
+    --ink: #e7ece8;
+    --muted: #9aa69e;
+    --line: #2e3a33;
+    --accent: #4cc596;
+    --accent-ink: #0b1a13;
+    --accent-soft: #183a2c;
+    --danger: #f2948c;
+    color-scheme: dark;
   }
 
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0;
     background: var(--bg);
-    color: var(--text);
-    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    font: 15px/1.55 var(--font-body);
   }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
-  header { padding: 56px 0 24px; }
-  .eyebrow {
-    display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: .04em;
-    text-transform: uppercase; color: var(--accent); margin-bottom: 12px;
-  }
-  h1 { font-size: clamp(30px, 6vw, 48px); line-height: 1.1; margin: 0 0 16px; letter-spacing: -.02em; }
-  h2 { font-size: clamp(22px, 4vw, 28px); margin: 0 0 8px; letter-spacing: -.01em; }
-  h3 { font-size: 17px; margin: 0 0 6px; }
-  p { margin: 0 0 12px; }
-  .lead { font-size: 18px; color: var(--muted); max-width: 680px; }
-  section { padding: 32px 0; }
-  .sub { color: var(--muted); margin-bottom: 20px; max-width: 680px; }
-
-  .card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 20px;
-  }
-  .grid { display: grid; gap: 16px; }
-  @media (min-width: 760px) {
-    .calc { grid-template-columns: 1fr 1fr; }
-    .three { grid-template-columns: repeat(3, 1fr); }
+  .wrap {
+    max-width: 1240px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
 
-  label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
-  .hint { font-weight: 400; color: var(--muted); font-size: 13px; }
-  .field { margin-bottom: 18px; }
-  .row { display: flex; gap: 10px; align-items: center; }
-  input[type="number"], select {
-    width: 100%; min-width: 0; padding: 10px 12px; font: inherit; color: var(--text);
-    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+  /* ---------- top bar ---------- */
+  .top { padding-block: 28px 8px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; }
+  .brand { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .brand h1 { font: 700 clamp(24px, 4vw, 32px)/1.1 var(--font-display); margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+  .brand h1 span { color: var(--accent); }
+  .brand p { margin: 0; color: var(--muted); max-width: 60ch; }
+  .urdu { font-size: 14px; color: var(--muted); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  button {
+    font: 500 14px/1 var(--font-body); cursor: pointer; border-radius: 10px;
+    padding: 10px 14px; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
   }
-  input[type="range"] { width: 100%; accent-color: var(--accent); }
-  input:focus-visible, select:focus-visible, button:focus-visible {
-    outline: 2px solid var(--accent); outline-offset: 2px;
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button.ghost { background: transparent; }
+  button.icon { padding: 8px 10px; color: var(--muted); }
+  button.icon:hover { color: var(--danger); border-color: var(--danger); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .notice {
+    margin: 12px 0 0; padding: 10px 14px; border-radius: 10px;
+    background: var(--accent-soft); font-size: 14px;
   }
+  .notice[hidden] { display: none; }
 
-  .big { font-size: clamp(28px, 6vw, 40px); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
-  .stat-label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
-  .stat { background: var(--surface-2); border-radius: 10px; padding: 12px; }
-  .stat b { display: block; font-size: 20px; }
+  /* ---------- desk ---------- */
+  .desk { display: grid; gap: 20px; padding-block: 16px 40px; }
+  @media (min-width: 980px) { .desk { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); align-items: start; } }
 
-  .meter { height: 12px; background: var(--surface-2); border-radius: 99px; overflow: hidden; margin: 8px 0 4px; }
-  .meter > div { height: 100%; width: 0; background: var(--bar); border-radius: 99px; transition: width .3s ease; }
-  .meter-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
-
-  .note { border-radius: 10px; padding: 12px 14px; font-size: 15px; margin-top: 12px; }
-  .note.good { background: var(--accent-soft); }
-  .note.warn { background: var(--warn-soft); }
-  .note.warn strong { color: var(--warn); }
-
-  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
-  button.chip {
-    font: inherit; font-size: 14px; padding: 7px 12px; border-radius: 99px; cursor: pointer;
-    background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+  .form { display: grid; gap: 14px; min-width: 0; }
+  fieldset {
+    margin: 0; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--panel); padding: 16px; min-width: 0;
   }
-  button.chip:hover { border-color: var(--accent); }
-  button.chip[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  legend {
+    font: 600 12px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); padding: 0 6px;
+  }
+  .cols { display: grid; gap: 12px; }
+  @media (min-width: 560px) { .cols.two { grid-template-columns: 1fr 1fr; } .cols.three { grid-template-columns: repeat(3, 1fr); } }
+  label { display: grid; gap: 5px; font-size: 13px; font-weight: 500; color: var(--muted); min-width: 0; }
+  input, select, textarea {
+    width: 100%; min-width: 0; font: 15px/1.4 var(--font-body); color: var(--ink);
+    background: var(--field); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px;
+  }
+  textarea { resize: vertical; min-height: 64px; }
+  input[type="number"] { font-variant-numeric: tabular-nums; }
 
-  table { width: 100%; border-collapse: collapse; font-size: 15px; }
-  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  th { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-  td.num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .items { display: grid; gap: 10px; }
+  .item { display: grid; gap: 8px; grid-template-columns: 1fr 1fr auto; align-items: end; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
+  .item .desc { grid-column: 1 / -1; }
+  @media (min-width: 560px) { .item { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1.3fr) auto; } .item .desc { grid-column: auto; } }
+  .add { margin-top: 10px; }
+
+  .hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+
+  /* ---------- the paper ---------- */
+  .sheet-wrap { position: sticky; top: calc(16px + env(safe-area-inset-top, 0px)); min-width: 0; }
+  .sheet-label { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .sheet {
+    background: var(--paper); color: var(--paper-ink);
+    border-radius: 6px; padding: clamp(20px, 4vw, 44px);
+    box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 12px 32px rgba(10,40,25,.10);
+    font-size: 14px; min-width: 0; overflow-wrap: anywhere;
+  }
+  .sheet-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: flex-start; }
+  .sheet h2 { font: 700 30px/1 var(--font-display); letter-spacing: .02em; margin: 0; color: #0b6e4f; }
+  .sheet .meta { display: grid; grid-template-columns: auto auto; gap: 2px 14px; font-size: 13px; text-align: right; }
+  .sheet .meta dt { color: var(--paper-muted); }
+  .sheet .meta dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .parties { display: grid; gap: 16px; margin: 28px 0 22px; }
+  @media (min-width: 480px) { .parties { grid-template-columns: 1fr 1fr; } }
+  .party-label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--paper-muted); margin-bottom: 4px; }
+  .party-name { font-weight: 600; font-size: 15px; }
+  .pre { white-space: pre-line; color: var(--paper-muted); }
+
   .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--paper-muted); text-align: left; font-weight: 600; padding: 8px 6px; border-bottom: 2px solid var(--paper-ink); }
+  td { padding: 10px 6px; border-bottom: 1px solid var(--paper-line); vertical-align: top; }
+  th.r, td.r { text-align: right; white-space: nowrap; }
 
-  ol.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; display: grid; gap: 12px; }
-  ol.steps li { counter-increment: s; position: relative; padding-left: 48px; }
-  ol.steps li::before {
-    content: counter(s); position: absolute; left: 0; top: 0; width: 34px; height: 34px;
-    border-radius: 50%; background: var(--accent-soft); color: var(--accent);
-    display: grid; place-items: center; font-weight: 700;
+  .totals { margin-left: auto; width: min(100%, 300px); margin-top: 14px; display: grid; gap: 6px; font-variant-numeric: tabular-nums; }
+  .totals div { display: flex; justify-content: space-between; gap: 12px; }
+  .totals .grand { border-top: 2px solid var(--paper-ink); padding-top: 8px; font: 700 18px/1.2 var(--font-display); }
+  .totals .pkr { color: var(--paper-muted); font-size: 13px; }
+
+  .foot { margin-top: 28px; display: grid; gap: 16px; }
+  @media (min-width: 480px) { .foot { grid-template-columns: 1fr 1fr; } }
+  .stamp { display: inline-block; margin-top: 10px; padding: 3px 10px; border: 2px solid #0b6e4f; color: #0b6e4f; border-radius: 4px; font: 700 12px/1.4 var(--font-display); letter-spacing: .1em; transform: rotate(-3deg); }
+
+  footer.site { padding-block: 0 40px; color: var(--muted); font-size: 13px; }
+  footer.site p { margin: 0 0 6px; max-width: 75ch; }
+
+
+  /* ---------- print: only the paper ---------- */
+  @media print {
+    @page { margin: 14mm; }
+    body { background: #fff; }
+    .top, .form, .sheet-label, footer.site, .notice { display: none !important; }
+    .desk { display: block; padding: 0; }
+    .sheet-wrap { position: static; }
+    .sheet { box-shadow: none; padding: 0; color: #000; }
   }
-  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); margin-left: 6px; }
-
-  footer { padding: 32px 0 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); margin-top: 24px; }
-  .theme-toggle { position: fixed; top: 12px; right: 12px; }
+  @media (prefers-reduced-motion: no-preference) { button { transition: border-color .15s; } }
 </style>
 </head>
 <body>
 
-<button class="chip theme-toggle" id="themeBtn" type="button" aria-label="Toggle light or dark theme">Theme</button>
-
 <div class="wrap">
-  <header>
-    <span class="eyebrow">Revenue Reality Lab</span>
-    <h1>Every big number is just <em>price × customers</em>.</h1>
-    <p class="lead">Pick a goal, set a price, and see exactly how many paying customers and visitors you'd need. Then follow a realistic path to your first $1,000, $10,000 and $100,000 a month.</p>
+  <header class="top">
+    <div class="brand">
+      <h1>Bill <span>Banao</span></h1>
+      <p>A free invoice maker for Pakistani freelancers. Bill foreign clients in their currency, add your Payoneer or bank details, and see what it's worth in rupees.</p>
+      <span class="urdu" lang="ur" dir="rtl">مفت انوائس بنائیں — کوئی سائن اپ نہیں</span>
+    </div>
+    <div class="actions">
+      <button class="primary" id="printBtn" type="button">Save as PDF</button>
+      <button id="copyBtn" type="button">Copy as text</button>
+      <button id="newBtn" type="button">New invoice</button>
+      <button class="ghost" id="themeBtn" type="button" aria-label="Switch light or dark theme">Theme</button>
+    </div>
   </header>
+  <p class="notice" id="notice" role="status" hidden></p>
 
-  <!-- ============ CALCULATOR ============ -->
-  <section id="calculator">
-    <h2>The calculator</h2>
-    <p class="sub">Monthly revenue = monthly price × paying customers. Paying customers = visitors × conversion rate. That's the whole formula.</p>
+  <main class="desk">
+    <form class="form" id="form" autocomplete="on">
+      <fieldset>
+        <legend>From (you)</legend>
+        <div class="cols two">
+          <label>Your name or business<input id="fromName"></label>
+          <label>Email<input id="fromEmail" type="email"></label>
+        </div>
+        <label style="margin-top:12px">Address / phone<textarea id="fromAddr" rows="2"></textarea></label>
+      </fieldset>
 
-    <div class="grid calc">
-      <div class="card">
-        <div class="presets" role="group" aria-label="Goal presets">
-          <button class="chip" type="button" data-goal="1000">$1K</button>
-          <button class="chip" type="button" data-goal="10000">$10K</button>
-          <button class="chip" type="button" data-goal="100000">$100K</button>
-          <button class="chip" type="button" data-goal="1000000">$1M</button>
-          <button class="chip" type="button" data-goal="1000000000000">$1 trillion</button>
+      <fieldset>
+        <legend>Bill to (client)</legend>
+        <div class="cols two">
+          <label>Client name<input id="toName"></label>
+          <label>Client email<input id="toEmail" type="email"></label>
+        </div>
+        <label style="margin-top:12px">Client address<textarea id="toAddr" rows="2"></textarea></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Invoice details</legend>
+        <div class="cols three">
+          <label>Invoice no.<input id="invNo"></label>
+          <label>Issue date<input id="issueDate" type="date"></label>
+          <label>Payment terms
+            <select id="terms">
+              <option value="0">Due on receipt</option>
+              <option value="7">Net 7</option>
+              <option value="15" selected>Net 15</option>
+              <option value="30">Net 30</option>
+            </select>
+          </label>
+        </div>
+        <div class="cols three" style="margin-top:12px">
+          <label>Currency
+            <select id="currency">
+              <option value="USD">USD — US dollar</option>
+              <option value="GBP">GBP — British pound</option>
+              <option value="EUR">EUR — Euro</option>
+              <option value="AED">AED — UAE dirham</option>
+              <option value="SAR">SAR — Saudi riyal</option>
+              <option value="CAD">CAD — Canadian dollar</option>
+              <option value="AUD">AUD — Australian dollar</option>
+              <option value="PKR">PKR — Pakistani rupee</option>
+            </select>
+          </label>
+          <label>Discount %<input id="discount" type="number" min="0" max="100" step="0.5" inputmode="decimal"></label>
+          <label>Tax %<input id="tax" type="number" min="0" max="100" step="0.5" inputmode="decimal"></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Work done</legend>
+        <div class="items" id="items"></div>
+        <button class="add ghost" id="addItem" type="button">+ Add line</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>Getting paid</legend>
+        <label><span>Payment details <span style="font-weight:400">(Payoneer email, bank, IBAN)</span></span><textarea id="payDetails" rows="3"></textarea></label>
+        <label style="margin-top:12px">Note to client<textarea id="notes" rows="2"></textarea></label>
+        <div class="cols two" style="margin-top:12px">
+          <label><span>Your rate: 1 <span id="rateCur">USD</span> = ? PKR</span><input id="pkrRate" type="number" min="0" step="0.01" inputmode="decimal"></label>
+          <label>Show PKR total on invoice?
+            <select id="showPkr"><option value="no">No, only for me</option><option value="yes">Yes</option></select>
+          </label>
+        </div>
+        <p class="hint">Check today's rate with your bank or Payoneer and type it in. The site never fetches rates, so it works offline.</p>
+      </fieldset>
+    </form>
+
+    <section class="sheet-wrap" aria-label="Invoice preview">
+      <p class="sheet-label">Live preview</p>
+      <article class="sheet" id="sheet">
+        <div class="sheet-head">
+          <div>
+            <h2>INVOICE</h2>
+            <div class="party-name" id="pFromName" style="margin-top:10px"></div>
+            <div class="pre" id="pFromAddr"></div>
+            <div class="pre" id="pFromEmail"></div>
+          </div>
+          <dl class="meta">
+            <dt>Invoice no.</dt><dd id="pNo"></dd>
+            <dt>Issued</dt><dd id="pIssue"></dd>
+            <dt>Due</dt><dd id="pDue"></dd>
+          </dl>
         </div>
 
-        <div class="field">
-          <label for="goal">Monthly revenue goal ($)</label>
-          <input id="goal" type="number" min="1" step="1" value="10000" inputmode="numeric">
+        <div class="parties">
+          <div>
+            <div class="party-label">Bill to</div>
+            <div class="party-name" id="pToName"></div>
+            <div class="pre" id="pToAddr"></div>
+            <div class="pre" id="pToEmail"></div>
+          </div>
+          <div>
+            <div class="party-label">Amount due</div>
+            <div class="party-name" id="pDueAmt" style="font: 700 24px/1.2 var(--font-display)"></div>
+          </div>
         </div>
 
-        <div class="field">
-          <label for="price">Price per customer, per month ($)</label>
-          <input id="price" type="number" min="0.01" step="0.01" value="29" inputmode="decimal">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
+            <tbody id="pRows"></tbody>
+          </table>
         </div>
 
-        <div class="field">
-          <label for="conv">Conversion rate <span class="hint">— share of visitors who pay: <b id="convOut">2%</b></span></label>
-          <input id="conv" type="range" min="0.1" max="10" step="0.1" value="2">
+        <div class="totals">
+          <div><span>Subtotal</span><span id="pSub"></span></div>
+          <div id="pDiscRow"><span id="pDiscLabel"></span><span id="pDisc"></span></div>
+          <div id="pTaxRow"><span id="pTaxLabel"></span><span id="pTax"></span></div>
+          <div class="grand"><span>Total</span><span id="pTotal"></span></div>
+          <div class="pkr" id="pPkrRow"><span>Approx. in PKR</span><span id="pPkr"></span></div>
         </div>
 
-        <div class="field">
-          <label for="churn">Monthly churn <span class="hint">— customers who cancel each month: <b id="churnOut">5%</b></span></label>
-          <input id="churn" type="range" min="0.5" max="20" step="0.5" value="5">
+        <div class="foot">
+          <div id="pPayBox">
+            <div class="party-label">How to pay</div>
+            <div class="pre" id="pPay" style="color:inherit"></div>
+          </div>
+          <div id="pNotesBox">
+            <div class="party-label">Note</div>
+            <div class="pre" id="pNotes"></div>
+            <span class="stamp">THANK YOU</span>
+          </div>
         </div>
-      </div>
+      </article>
+    </section>
+  </main>
 
-      <div class="card" aria-live="polite">
-        <div class="stat-label">Paying customers you need</div>
-        <div class="big" id="custOut">—</div>
-
-        <div class="stats">
-          <div class="stat"><span class="stat-label">Visitors / month</span><b id="visOut">—</b></div>
-          <div class="stat"><span class="stat-label">New sign-ups / month to stay level</span><b id="replOut">—</b></div>
-          <div class="stat"><span class="stat-label">Yearly revenue</span><b id="yearOut">—</b></div>
-          <div class="stat"><span class="stat-label">Avg. customer lifetime</span><b id="lifeOut">—</b></div>
-        </div>
-
-        <div class="stat-label">Your goal on the road to $1 trillion (log scale)</div>
-        <div class="meter"><div id="meterBar"></div></div>
-        <div class="meter-scale"><span>$1K</span><span>$1M</span><span>$1B</span><span>$1T</span></div>
-
-        <div id="verdict" class="note good"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ REALITY CHECK ============ -->
-  <section id="reality">
-    <h2>What $1 trillion a month actually means</h2>
-    <p class="sub">$1 trillion every month is $12 trillion a year. Rough comparisons, using approximate public figures:</p>
-    <div class="card table-scroll">
-      <table>
-        <thead><tr><th>Comparison</th><th>Approx. figure</th><th>vs. $12T / year</th></tr></thead>
-        <tbody>
-          <tr><td>The whole world's economic output (GDP)</td><td class="num">~$110–120T / yr</td><td>about 10% of everything every human produces</td></tr>
-          <tr><td>The world's largest company by revenue (Walmart)</td><td class="num">~$680B / yr</td><td>about 17× bigger</td></tr>
-          <tr><td>Apple's annual revenue</td><td class="num">~$400B / yr</td><td>about 30× bigger</td></tr>
-          <tr><td>Every person on Earth (~8.2 billion)</td><td class="num">—</td><td>each would pay you ~$120 every single month</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="note warn"><strong>Honest takeaway:</strong> no website, product or company has ever come close to this, and none can be "built" in one file. The good news: the exact same formula that makes $1T impossible makes $10K/month very achievable.</div>
-  </section>
-
-  <!-- ============ PLAN ============ -->
-  <section id="plan">
-    <h2>A realistic path that actually works</h2>
-    <p class="sub">Revenue isn't generated by code. It's generated by solving a painful problem for people who will pay. The website is just the shop window.</p>
-    <ol class="steps">
-      <li><h3>Find one painful problem <span class="tag">Week 1–2</span></h3>
-        <p>Talk to 20 people in one niche (shop owners, students, freelancers). Ask: "What task wastes your time or money every week?" Write down the exact words they use.</p></li>
-      <li><h3>Pre-sell before you build <span class="tag">Week 3</span></h3>
-        <p>Make a one-page site describing the fix and a price. If nobody pays or joins a waitlist, change the idea — you just saved months.</p></li>
-      <li><h3>Build the smallest useful version <span class="tag">Week 4–8</span></h3>
-        <p>Solve one problem well. Manual work behind the scenes is fine at first ("do things that don't scale").</p></li>
-      <li><h3>Reach $1K/month <span class="tag">~35 customers at $29</span></h3>
-        <p>Get customers by hand: direct messages, communities, helpful posts. Learn why people buy and why they leave.</p></li>
-      <li><h3>Reach $10K/month <span class="tag">~345 customers at $29</span></h3>
-        <p>Find one repeatable channel (search, content, partnerships). Cut churn — keeping customers is cheaper than finding new ones.</p></li>
-      <li><h3>Reach $100K/month <span class="tag">raise price or add plans</span></h3>
-        <p>Hire help, add higher tiers for bigger customers, and measure everything: visitors, conversion, churn, lifetime value.</p></li>
-    </ol>
-  </section>
-
-  <!-- ============ CONCEPTS ============ -->
-  <section id="concepts">
-    <h2>Key words, explained simply</h2>
-    <div class="grid three">
-      <div class="card"><h3>Conversion rate</h3><p>Out of 100 shoppers walking past a lemonade stand, if 2 buy, the conversion rate is 2%. Typical websites convert 1–3% of visitors.</p></div>
-      <div class="card"><h3>Churn</h3><p>A leaky bucket. If 5% of customers cancel every month, you must keep pouring in new ones just to stay level.</p></div>
-      <div class="card"><h3>Customer lifetime</h3><p>On average a customer stays 1 ÷ churn months. At 5% churn that's 20 months, so one $29 customer is worth about $580.</p></div>
-    </div>
-  </section>
-
-  <footer>
-    Figures are rounded estimates for illustration only, not financial advice. Built as a single self-contained HTML file — no tracking, no external requests.
+  <footer class="site">
+    <p>Your invoices are saved only in this browser on this device. Nothing is uploaded anywhere.</p>
+    <p>This tool doesn't give tax advice. Ask your bank or a tax advisor about the rules for remittances and freelance income.</p>
   </footer>
 </div>
+
 
 <script>
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var goal = $("goal"), price = $("price"), conv = $("conv"), churn = $("churn");
-  var WORLD_POP = 8.2e9;
+  var KEY = "billbanao-v1";
+  var FIELDS = ["fromName","fromEmail","fromAddr","toName","toEmail","toAddr","invNo","issueDate","terms","currency","discount","tax","payDetails","notes","pkrRate","showPkr"];
 
-  function fmtMoney(n) {
-    if (!isFinite(n)) return "—";
-    var abs = Math.abs(n), units = [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "K"]];
-    for (var i = 0; i < units.length; i++) {
-      if (abs >= units[i][0]) return "$" + trim(n / units[i][0]) + units[i][1];
-    }
-    return "$" + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  }
-  function fmtCount(n) {
-    if (!isFinite(n)) return "—";
-    if (n >= 1e12) return trim(n / 1e12) + " trillion";
-    if (n >= 1e9) return trim(n / 1e9) + " billion";
-    if (n >= 1e6) return trim(n / 1e6) + " million";
-    return Math.ceil(n).toLocaleString();
-  }
-  function trim(x) { return (Math.round(x * 10) / 10).toString(); }
-  function readNum(el, fallback) {
-    var v = parseFloat(el.value);
-    return isFinite(v) && v > 0 ? v : fallback;
+  function today() {
+    var d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
   }
 
-  function update() {
-    var g = readNum(goal, 1), p = readNum(price, 1);
-    var c = parseFloat(conv.value) / 100, ch = parseFloat(churn.value) / 100;
-    $("convOut").textContent = conv.value + "%";
-    $("churnOut").textContent = churn.value + "%";
+  // Example invoice so the first view shows how it works. Clearly marked as an example.
+  var EXAMPLE = {
+    fromName: "Ayesha Khan (example)", fromEmail: "ayesha@example.com", fromAddr: "Gulberg III, Lahore, Pakistan",
+    toName: "Northwind Studio Ltd (example)", toEmail: "accounts@example.com", toAddr: "London, United Kingdom",
+    invNo: "INV-2026-001", issueDate: today(), terms: "15", currency: "USD", discount: "0", tax: "0",
+    payDetails: "Payoneer: ayesha@example.com\nOr bank transfer: Meezan Bank, IBAN PK00 MEZN 0000 0000 0000 0000",
+    notes: "Thank you for your business! Payment within 15 days please.",
+    pkrRate: "280", showPkr: "no",
+    items: [
+      { d: "Logo design — 3 concepts + final files", q: 1, r: 150 },
+      { d: "Social media post designs", q: 10, r: 12 },
+      { d: "Revisions (hourly)", q: 2, r: 20 }
+    ],
+    example: true
+  };
 
-    var customers = Math.ceil(g / p);
-    var visitors = customers / c;
-    var replace = Math.ceil(customers * ch);
-    var lifetime = 1 / ch;
+  var state;
 
-    $("custOut").textContent = fmtCount(customers);
-    $("visOut").textContent = fmtCount(visitors);
-    $("replOut").textContent = fmtCount(replace);
-    $("yearOut").textContent = fmtMoney(g * 12);
-    $("lifeOut").textContent = trim(lifetime) + " mo (" + fmtMoney(lifetime * p) + ")";
+  function load() {
+    try { var s = JSON.parse(localStorage.getItem(KEY)); if (s && s.items) return s; } catch (e) {}
+    return JSON.parse(JSON.stringify(EXAMPLE));
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
 
-    // log scale meter from $1K (0%) to $1T (100%)
-    var pct = (Math.log10(Math.max(g, 1000)) - 3) / 9 * 100;
-    $("meterBar").style.width = Math.min(100, Math.max(0, pct)) + "%";
+  function num(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+  function money(n, cur) {
+    try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur, maximumFractionDigits: 2 }).format(n); }
+    catch (e) { return cur + " " + n.toFixed(2); }
+  }
+  function niceDate(iso) {
+    if (!iso) return "—";
+    var d = new Date(iso + "T00:00:00");
+    return isNaN(d) ? "—" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  }
+  function addDays(iso, n) {
+    var d = new Date(iso + "T00:00:00"); if (isNaN(d)) return "";
+    d.setDate(d.getDate() + n);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function text(id, v) { $(id).textContent = v; }
 
-    var v = $("verdict");
-    if (customers > WORLD_POP) {
-      v.className = "note warn";
-      v.innerHTML = "<strong>Impossible at this price:</strong> you'd need " + trim(customers / WORLD_POP) +
-        "× more paying customers than there are people on Earth. Raise the price or lower the goal.";
-    } else if (visitors > WORLD_POP) {
-      v.className = "note warn";
-      v.innerHTML = "<strong>Not realistic:</strong> you'd need more monthly visitors than there are humans (" +
-        fmtCount(visitors) + "). Even Google doesn't convert everyone.";
-    } else if (g >= 1e9) {
-      v.className = "note warn";
-      v.innerHTML = "<strong>Mega-corporation territory.</strong> Only a handful of companies on Earth earn this much per month, after decades and many thousands of employees.";
-    } else if (g >= 1e6) {
-      v.className = "note good";
-      v.innerHTML = "<strong>Ambitious but real.</strong> Many software companies reach $1M+/month — usually after years of steady growth.";
-    } else {
-      v.className = "note good";
-      v.innerHTML = "<strong>Very achievable.</strong> " + fmtCount(customers) +
-        " customers is a goal one person or a small team can reach with a genuinely useful product.";
-    }
-
-    document.querySelectorAll("[data-goal]").forEach(function (b) {
-      b.setAttribute("aria-pressed", String(Number(b.dataset.goal) === g));
+  // ----- line items -----
+  function renderItems() {
+    var box = $("items"); box.textContent = "";
+    state.items.forEach(function (it, i) {
+      var row = document.createElement("div"); row.className = "item";
+      row.innerHTML =
+        '<label class="desc">Description<input data-k="d"></label>' +
+        '<label>Qty<input data-k="q" type="number" min="0" step="any" inputmode="decimal"></label>' +
+        '<label>Rate<input data-k="r" type="number" min="0" step="any" inputmode="decimal"></label>' +
+        '<button class="icon" type="button" aria-label="Remove line">✕</button>';
+      row.querySelectorAll("input").forEach(function (inp) {
+        inp.id = "item-" + i + "-" + inp.dataset.k;
+        inp.value = it[inp.dataset.k];
+        inp.addEventListener("input", function () {
+          it[inp.dataset.k] = inp.dataset.k === "d" ? inp.value : inp.value;
+          update();
+        });
+      });
+      row.querySelector("button").addEventListener("click", function () {
+        state.items.splice(i, 1);
+        if (!state.items.length) state.items.push({ d: "", q: 1, r: 0 });
+        renderItems(); update();
+      });
+      box.appendChild(row);
     });
   }
 
-  document.querySelectorAll("[data-goal]").forEach(function (b) {
-    b.addEventListener("click", function () { goal.value = b.dataset.goal; update(); });
-  });
-  [goal, price, conv, churn].forEach(function (el) { el.addEventListener("input", update); });
+  // ----- totals + preview -----
+  function totals() {
+    var sub = state.items.reduce(function (s, it) { return s + num(it.q) * num(it.r); }, 0);
+    var disc = sub * Math.min(100, Math.max(0, num(state.discount))) / 100;
+    var tax = (sub - disc) * Math.min(100, Math.max(0, num(state.tax))) / 100;
+    return { sub: sub, disc: disc, tax: tax, total: sub - disc + tax };
+  }
 
-  // theme toggle (remembered per browser when storage is available)
+  function update() {
+    FIELDS.forEach(function (f) { state[f] = $(f).value; });
+    var cur = state.currency, t = totals();
+
+    text("pFromName", state.fromName || "Your name");
+    text("pFromAddr", state.fromAddr);
+    text("pFromEmail", state.fromEmail);
+    text("pToName", state.toName || "Client name");
+    text("pToAddr", state.toAddr);
+    text("pToEmail", state.toEmail);
+    text("pNo", state.invNo || "—");
+    text("pIssue", niceDate(state.issueDate));
+    var termDays = num(state.terms);
+    text("pDue", termDays === 0 ? "On receipt" : niceDate(addDays(state.issueDate, termDays)));
+
+    var body = $("pRows"); body.textContent = "";
+    state.items.forEach(function (it) {
+      if (!it.d && !num(it.r)) return;
+      var tr = document.createElement("tr");
+      [it.d || "—", String(num(it.q)), money(num(it.r), cur), money(num(it.q) * num(it.r), cur)].forEach(function (v, j) {
+        var td = document.createElement("td"); td.textContent = v; if (j) td.className = "r"; tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+
+    text("pSub", money(t.sub, cur));
+    $("pDiscRow").hidden = !t.disc;
+    text("pDiscLabel", "Discount (" + num(state.discount) + "%)");
+    text("pDisc", "−" + money(t.disc, cur));
+    $("pTaxRow").hidden = !t.tax;
+    text("pTaxLabel", "Tax (" + num(state.tax) + "%)");
+    text("pTax", money(t.tax, cur));
+    text("pTotal", money(t.total, cur));
+    text("pDueAmt", money(t.total, cur));
+
+    text("rateCur", cur);
+    var rate = num(state.pkrRate);
+    $("pkrRate").disabled = cur === "PKR";
+    var pkr = cur === "PKR" ? t.total : t.total * rate;
+    text("pPkr", money(pkr, "PKR"));
+    $("pPkrRow").hidden = cur === "PKR" || !rate || state.showPkr !== "yes";
+
+    text("pPay", state.payDetails);
+    $("pPayBox").hidden = !state.payDetails.trim();
+    text("pNotes", state.notes);
+
+    notice(state.example
+      ? "This is an example invoice. Type your own details on the left. Everything saves automatically in this browser."
+      : (cur !== "PKR" && rate && state.showPkr !== "yes" ? "For you only: this invoice is worth about " + money(pkr, "PKR") + " at your rate." : ""));
+    save();
+  }
+
+  function notice(msg) { var n = $("notice"); n.textContent = msg; n.hidden = !msg; }
+
+  function fill() {
+    FIELDS.forEach(function (f) { if (state[f] !== undefined) $(f).value = state[f]; });
+    renderItems(); update();
+  }
+
+  function nextNo(no) {
+    var m = String(no || "").match(/^(.*?)(\d+)$/);
+    if (!m) return "INV-" + new Date().getFullYear() + "-001";
+    return m[1] + String(parseInt(m[2], 10) + 1).padStart(m[2].length, "0");
+  }
+
+  // ----- actions -----
+  FIELDS.forEach(function (f) {
+    $(f).addEventListener("input", function () { state.example = false; update(); });
+    $(f).addEventListener("change", update);
+  });
+  $("items").addEventListener("input", function () { state.example = false; });
+  $("addItem").addEventListener("click", function () {
+    state.items.push({ d: "", q: 1, r: 0 }); renderItems(); update();
+    var inputs = $("items").querySelectorAll('input[data-k="d"]'); inputs[inputs.length - 1].focus();
+  });
+
+  $("newBtn").addEventListener("click", function () {
+    // keep your own details, payment info and rate; clear the client and the work
+    state.invNo = nextNo(state.invNo);
+    state.issueDate = today();
+    state.toName = state.toEmail = state.toAddr = "";
+    state.items = [{ d: "", q: 1, r: 0 }];
+    state.discount = state.tax = "0";
+    state.example = false;
+    fill();
+    $("toName").focus();
+    notice("New invoice " + state.invNo + " started. Your own details and payment info were kept.");
+  });
+
+  function asText() {
+    var t = totals(), c = state.currency, lines = [
+      "INVOICE " + state.invNo,
+      "From: " + state.fromName + (state.fromEmail ? " <" + state.fromEmail + ">" : ""),
+      "To: " + state.toName,
+      "Issued: " + niceDate(state.issueDate) + "   Due: " + $("pDue").textContent,
+      ""
+    ];
+    state.items.forEach(function (it) {
+      if (it.d || num(it.r)) lines.push("- " + (it.d || "Item") + ": " + num(it.q) + " × " + money(num(it.r), c) + " = " + money(num(it.q) * num(it.r), c));
+    });
+    lines.push("", "Subtotal: " + money(t.sub, c));
+    if (t.disc) lines.push("Discount: −" + money(t.disc, c));
+    if (t.tax) lines.push("Tax: " + money(t.tax, c));
+    lines.push("TOTAL: " + money(t.total, c));
+    if (state.payDetails.trim()) lines.push("", "How to pay:", state.payDetails);
+    if (state.notes.trim()) lines.push("", state.notes);
+    return lines.join("\n");
+  }
+  $("copyBtn").addEventListener("click", function () {
+    var txt = asText();
+    function fallback() {
+      var ta = document.createElement("textarea"); ta.value = txt; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); notice("Copied. Paste it into Fiverr, Upwork, email or WhatsApp."); }
+      catch (e) { notice("Couldn't copy automatically. Select the preview text and copy it by hand."); }
+      ta.remove();
+    }
+    try {
+      navigator.clipboard.writeText(txt).then(function () { notice("Copied. Paste it into Fiverr, Upwork, email or WhatsApp."); }, fallback);
+    } catch (e) { fallback(); }
+  });
+
+  var printBtn = $("printBtn");
+  if (printBtn) printBtn.addEventListener("click", function () {
+    var old = document.title;
+    document.title = (state.invNo || "invoice") + (state.toName ? " - " + state.toName : "");
+    window.print();
+    document.title = old;
+  });
+
+  // ----- theme -----
   var root = document.documentElement;
-  try { var saved = localStorage.getItem("rrl-theme"); if (saved) root.dataset.theme = saved; } catch (e) {}
+  try { var th = localStorage.getItem("billbanao-theme"); if (th) root.dataset.theme = th; } catch (e) {}
   $("themeBtn").addEventListener("click", function () {
-    var dark = root.dataset.theme ? root.dataset.theme === "dark"
-      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
     root.dataset.theme = dark ? "light" : "dark";
-    try { localStorage.setItem("rrl-theme", root.dataset.theme); } catch (e) {}
+    try { localStorage.setItem("billbanao-theme", root.dataset.theme); } catch (e) {}
   });
 
-  update();
+  state = load();
+  fill();
 })();
 </script>
 </body>
