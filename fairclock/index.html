@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FairClock</title>
+<meta name="description" content="Rotate your team's recurring meeting across time zones so nobody is always the one joining at midnight. Free, no sign-up.">
+<meta name="theme-color" content="#1b1d3a">
+<meta property="og:title" content="FairClock: share the late-night meetings fairly">
+<meta property="og:description" content="Add your team and their cities. FairClock builds a rotating meeting schedule that spreads the early mornings and late nights evenly.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%2730%27 fill=%27%231b1d3a%27/%3E%3Cpath d=%27M32 2a30 30 0 0 1 0 60z%27 fill=%27%23f2b33d%27/%3E%3Cpath d=%27M32 14v18l11 7%27 stroke=%27%23fff%27 stroke-width=%275%27 fill=%27none%27 stroke-linecap=%27round%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  /* Layout: a day/night instrument. Team setup on the left; on the right, the weeks laid out as a grid of
+     sky colors (day, dusk, night) so you can see who carries the night shift. */
+  :root {
+    --bg: #f3f4f8;
+    --panel: #ffffff;
+    --field: #f1f2f7;
+    --ink: #181a33;
+    --muted: #5c6080;
+    --line: #dcdeea;
+    --accent: #1b1d3a;
+    --accent-ink: #ffffff;
+    --sun: #f2b33d;
+    --day: #a8cdfa;
+    --day-ink: #0f3d73;
+    --dusk: #f2b33d;
+    --dusk-ink: #5a3a00;
+    --night: #2c2770;
+    --night-ink: #ffffff;
+    --fair: #11875d;
+    --unfair: #b8bccf;
+    --font-display: "Sora", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e0f1d;
+      --panel: #171931;
+      --field: #1f2240;
+      --ink: #e8e9f4;
+      --muted: #9a9dbb;
+      --line: #2b2e52;
+      --accent: #f2b33d;
+      --accent-ink: #1b1400;
+      --day: #6fa8ec;
+      --day-ink: #04213f;
+      --dusk: #e0a434;
+      --dusk-ink: #2a1a00;
+      --night: #4b43b8;
+      --night-ink: #ffffff;
+      --fair: #3fcf95;
+      --unfair: #474b74;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e0f1d;
+    --panel: #171931;
+    --field: #1f2240;
+    --ink: #e8e9f4;
+    --muted: #9a9dbb;
+    --line: #2b2e52;
+    --accent: #f2b33d;
+    --accent-ink: #1b1400;
+    --day: #6fa8ec;
+    --day-ink: #04213f;
+    --dusk: #e0a434;
+    --dusk-ink: #2a1a00;
+    --night: #4b43b8;
+    --night-ink: #ffffff;
+    --fair: #3fcf95;
+    --unfair: #474b74;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--font-body); }
+  .wrap {
+    max-width: 1280px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  :focus-visible { outline: 2px solid var(--sun); outline-offset: 2px; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  /* ---------- header ---------- */
+  header.top { padding-block: 32px 8px; display: grid; gap: 14px; }
+  .logo { display: flex; align-items: center; gap: 10px; font: 700 18px/1 var(--font-display); letter-spacing: -.01em; }
+  .logo svg { width: 28px; height: 28px; flex: none; }
+  h1 {
+    font: 700 clamp(28px, 5vw, 50px)/1.05 var(--font-display); letter-spacing: -.03em; margin: 0;
+    max-width: 18ch; text-wrap: balance;
+  }
+  h1 .night-word {
+    background: var(--night); color: var(--night-ink); padding: 0 .18em; border-radius: .18em;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+  }
+  .lead { margin: 0; color: var(--muted); font-size: 17px; max-width: 62ch; }
+
+  /* ---------- layout ---------- */
+  .app { display: grid; gap: 20px; padding-block: 20px 40px; }
+  @media (min-width: 1040px) { .app { grid-template-columns: 400px minmax(0, 1fr); align-items: start; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; min-width: 0; }
+  .panel h2 { font: 600 13px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+  .setup { display: grid; gap: 16px; }
+  @media (min-width: 1040px) { .setup { position: sticky; top: calc(16px + env(safe-area-inset-top, 0px)); } }
+
+  label { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color: var(--muted); min-width: 0; }
+  input, select {
+    width: 100%; min-width: 0; font: 14px/1.3 var(--font-body); color: var(--ink);
+    background: var(--field); border: 1px solid var(--line); border-radius: 8px; padding: 8px 9px;
+  }
+  .person { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; padding-block: 12px; border-top: 1px solid var(--line); }
+  .person:first-child { border-top: 0; padding-top: 0; }
+  .person .fields { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); min-width: 0; }
+  .person .hours { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; grid-column: 1 / -1; }
+  .person .remove { align-self: start; margin-top: 18px; }
+  .settings { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  button {
+    font: 600 14px/1 var(--font-body); cursor: pointer; border-radius: 9px; padding: 10px 14px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  }
+  button:hover { border-color: var(--ink); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button.small { padding: 7px 10px; font-size: 13px; }
+  button.remove { padding: 6px 9px; color: var(--muted); background: transparent; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .status { font-size: 13px; color: var(--fair); min-height: 1.4em; margin: 0; }
+
+  /* ---------- results ---------- */
+  .results { display: grid; gap: 20px; min-width: 0; }
+  .verdict { display: grid; gap: 16px; }
+  @media (min-width: 720px) { .verdict { grid-template-columns: 1.4fr 1fr 1fr; align-items: start; } }
+  .verdict .headline { font: 600 clamp(18px, 2.4vw, 22px)/1.3 var(--font-display); margin: 0; text-wrap: balance; }
+  .verdict .headline b { color: var(--fair); }
+  .metric { border-left: 3px solid var(--line); padding-left: 14px; display: grid; align-content: start; gap: 2px; }
+  .metric.good { border-color: var(--fair); }
+  .metric .k { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+  .metric .v { font: 700 30px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+  .metric .s { font-size: 13px; color: var(--muted); }
+
+  .compare { display: grid; gap: 18px; }
+  @media (min-width: 860px) { .compare { grid-template-columns: 1fr 1fr; } }
+  .grid-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 8px; flex-wrap: wrap; }
+  .grid-title h3 { font: 600 15px/1.2 var(--font-display); margin: 0; }
+  .grid-title span { font-size: 12px; color: var(--muted); }
+  .sky { display: grid; gap: 3px; align-items: center; }
+  .sky .who { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 6px; }
+  .cell { height: 22px; border-radius: 4px; }
+  .c0 { background: var(--day); }
+  .c1 { background: var(--dusk); }
+  .c3 { background: var(--night); }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+
+  .bars { display: grid; gap: 12px; }
+  .bar-row { display: grid; gap: 4px 12px; grid-template-columns: minmax(80px, 140px) minmax(0, 1fr); align-items: center; }
+  .bar-row .name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-pair { display: grid; gap: 3px; }
+  .bar { height: 10px; border-radius: 99px; background: var(--field); overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 99px; }
+  .bar.fixed > div { background: var(--unfair); }
+  .bar.fair > div { background: var(--fair); }
+  .bar-note { font-size: 12px; color: var(--muted); grid-column: 2; }
+  @media (prefers-reduced-motion: no-preference) { .bar > div { transition: width .35s ease; } }
+
+  .table-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; font-weight: 600; }
+  td { padding: 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td.wk { font-weight: 600; }
+  .chip { display: inline-block; padding: 3px 8px; border-radius: 6px; font: 500 12px/1.3 var(--font-mono); font-variant-numeric: tabular-nums; }
+  .chip.c0 { color: var(--day-ink); }
+  .chip.c1 { color: var(--dusk-ink); }
+  .chip.c3 { color: var(--night-ink); }
+
+  .how { display: grid; gap: 16px; padding-block: 8px 24px; }
+  @media (min-width: 760px) { .how { grid-template-columns: repeat(3, 1fr); } }
+  .how h3 { font: 600 16px/1.3 var(--font-display); margin: 0 0 4px; }
+  .how p { margin: 0; color: var(--muted); }
+  footer { padding-block: 16px 40px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); }
+  footer p { margin: 0 0 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#1b1d3a"/><path d="M32 2a30 30 0 0 1 0 60z" fill="#f2b33d"/><path d="M32 14v18l11 7" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round"/></svg>
+      FairClock
+    </div>
+    <h1>Stop making the same person join at <span class="night-word">midnight</span>.</h1>
+    <p class="lead">Add your team and their cities. FairClock rotates your weekly meeting so the early mornings and late nights are shared evenly, and shows everyone the score.</p>
+  </header>
+
+  <main class="app">
+    <!-- ======== SETUP ======== -->
+    <aside class="setup">
+      <section class="panel" aria-labelledby="teamTitle">
+        <h2 id="teamTitle">Your team</h2>
+        <div id="people"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="small" id="addPerson" type="button">+ Add person</button>
+          <button class="small" id="resetBtn" type="button">Load example team</button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="meetTitle">
+        <h2 id="meetTitle">The meeting</h2>
+        <div class="settings">
+          <label>Length
+            <select id="duration">
+              <option value="30">30 min</option>
+              <option value="45">45 min</option>
+              <option value="60" selected>1 hour</option>
+              <option value="90">90 min</option>
+            </select>
+          </label>
+          <label>Weeks
+            <select id="weeks">
+              <option value="4">4</option>
+              <option value="8">8</option>
+              <option value="12" selected>12</option>
+              <option value="26">26</option>
+            </select>
+          </label>
+          <label>First week
+            <input id="startDate" type="date">
+          </label>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="shareTitle">
+        <h2 id="shareTitle">Share it</h2>
+        <div class="row">
+          <button class="primary" id="copyText" type="button">Copy schedule</button>
+          <button class="standalone-only" id="copyLink" type="button">Copy team link</button>
+          <button class="standalone-only" id="downloadIcs" type="button">Add to calendar (.ics)</button>
+        </div>
+        <p class="status" id="status" role="status"></p>
+      </section>
+    </aside>
+
+    <!-- ======== RESULTS ======== -->
+    <section class="results" aria-live="polite">
+      <div class="panel verdict">
+        <p class="headline" id="headline"></p>
+        <div class="metric">
+          <span class="k">Same time every week</span>
+          <span class="v" id="mFixed"></span>
+          <span class="s" id="mFixedS"></span>
+        </div>
+        <div class="metric good">
+          <span class="k">With FairClock</span>
+          <span class="v" id="mFair"></span>
+          <span class="s" id="mFairS"></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="compare">
+          <div>
+            <div class="grid-title"><h3>Same time every week</h3><span id="fixedTime"></span></div>
+            <div class="sky" id="skyFixed"></div>
+          </div>
+          <div>
+            <div class="grid-title"><h3>FairClock rotation</h3><span>time moves week to week</span></div>
+            <div class="sky" id="skyFair"></div>
+          </div>
+        </div>
+        <div class="legend" style="margin-top:14px">
+          <span><i class="c0"></i>Work hours</span>
+          <span><i class="c1"></i>Early or late (7am–10pm)</span>
+          <span><i class="c3"></i>Night (10pm–7am)</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Who carries the burden</h2>
+        <div class="bars" id="bars"></div>
+        <div class="legend" style="margin-top:12px">
+          <span><i style="background:var(--unfair)"></i>Same time every week</span>
+          <span><i style="background:var(--fair)"></i>FairClock</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>The schedule, in everyone's local time</h2>
+        <div class="table-scroll"><table id="schedule"></table></div>
+      </div>
+    </section>
+  </main>
+
+  <section class="how" aria-label="How it works">
+    <div>
+      <h3>How the score works</h3>
+      <p>A meeting in someone's work hours costs them 0 points. Early or late (7am–10pm, outside work) costs 1. Night (10pm–7am) costs 3, because lost sleep hurts most.</p>
+    </div>
+    <div>
+      <h3>How the rotation is chosen</h3>
+      <p>Each week FairClock tries every half-hour slot and picks the one that keeps everyone's running total as even as possible. Whoever suffered last week gets the easy slot next.</p>
+    </div>
+    <div>
+      <h3>Daylight saving included</h3>
+      <p>Times are worked out for each real date, so clock changes in New York, London or Sydney are handled automatically.</p>
+    </div>
+  </section>
+
+  <footer>
+    <p>Your team list stays in this browser. Nothing is uploaded.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY = "fairclock-v1";
+  var STEP = 30; // minutes between candidate start times
+
+  var ZONES = [
+    ["Pacific/Honolulu","Honolulu"],["America/Los_Angeles","Los Angeles"],["America/Denver","Denver"],
+    ["America/Chicago","Chicago"],["America/Mexico_City","Mexico City"],["America/New_York","New York"],
+    ["America/Toronto","Toronto"],["America/Bogota","Bogotá"],["America/Sao_Paulo","São Paulo"],
+    ["America/Argentina/Buenos_Aires","Buenos Aires"],["UTC","UTC"],["Europe/London","London"],
+    ["Europe/Dublin","Dublin"],["Europe/Lisbon","Lisbon"],["Africa/Lagos","Lagos"],["Europe/Paris","Paris"],
+    ["Europe/Berlin","Berlin"],["Europe/Madrid","Madrid"],["Europe/Amsterdam","Amsterdam"],
+    ["Europe/Warsaw","Warsaw"],["Africa/Cairo","Cairo"],["Africa/Johannesburg","Johannesburg"],
+    ["Europe/Istanbul","Istanbul"],["Africa/Nairobi","Nairobi"],["Asia/Riyadh","Riyadh"],
+    ["Asia/Dubai","Dubai"],["Asia/Karachi","Karachi"],["Asia/Kolkata","India"],["Asia/Dhaka","Dhaka"],
+    ["Asia/Bangkok","Bangkok"],["Asia/Jakarta","Jakarta"],["Asia/Singapore","Singapore"],
+    ["Asia/Manila","Manila"],["Asia/Shanghai","Shanghai"],["Asia/Hong_Kong","Hong Kong"],
+    ["Asia/Seoul","Seoul"],["Asia/Tokyo","Tokyo"],["Australia/Perth","Perth"],
+    ["Australia/Brisbane","Brisbane"],["Australia/Sydney","Sydney"],["Pacific/Auckland","Auckland"]
+  ];
+  var myZone = "UTC";
+  try { myZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch (e) {}
+  if (!ZONES.some(function (z) { return z[0] === myZone; })) ZONES.unshift([myZone, myZone.split("/").pop().replace(/_/g, " ")]);
+  function zoneLabel(tz) { for (var i = 0; i < ZONES.length; i++) if (ZONES[i][0] === tz) return ZONES[i][1]; return tz; }
+
+  function nextMonday() {
+    var d = new Date(); d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7));
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  function example() {
+    return {
+      people: [
+        { name: "Tom (example)", tz: "America/New_York", ws: 9, we: 17 },
+        { name: "Sarah (example)", tz: "Europe/London", ws: 9, we: 17 },
+        { name: "Ali (example)", tz: "Asia/Karachi", ws: 10, we: 18 },
+        { name: "Mei (example)", tz: "Australia/Sydney", ws: 9, we: 17 }
+      ],
+      duration: 60, weeks: 12, startDate: nextMonday()
+    };
+  }
+
+  // ---------- state ----------
+  var state = null;
+  function valid(s) { return s && Array.isArray(s.people) && s.people.length; }
+  function fromHash() {
+    var h = location.hash;
+    if (h.indexOf("#team=") !== 0) return null;
+    try { return JSON.parse(decodeURIComponent(escape(atob(h.slice(6).replace(/-/g, "+").replace(/_/g, "/"))))); } catch (e) { return null; }
+  }
+  state = fromHash();
+  if (!valid(state)) { try { state = JSON.parse(localStorage.getItem(KEY)); } catch (e) { state = null; } }
+  if (!valid(state)) state = example();
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  // ---------- time maths ----------
+  var fmtCache = {};
+  function hourIn(ms, tz) {
+    var f = fmtCache[tz] || (fmtCache[tz] = new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", hour: "2-digit", minute: "2-digit" }));
+    var h = 0, m = 0;
+    f.formatToParts(new Date(ms)).forEach(function (p) { if (p.type === "hour") h = +p.value % 24; if (p.type === "minute") m = +p.value; });
+    return h + m / 60;
+  }
+  function inWork(h, p) { return p.ws < p.we ? (h >= p.ws && h < p.we) : (h >= p.ws || h < p.we); }
+  function pain(ms, p, dur) {
+    var worst = 0;
+    for (var t = 0; t < dur; t += 15) {
+      var h = hourIn(ms + t * 60000, p.tz);
+      var s = inWork(h, p) ? 0 : (h >= 22 || h < 7) ? 3 : 1;
+      if (s > worst) worst = s;
+    }
+    return worst;
+  }
+  var showFmt = {};
+  function localLabel(ms, tz) {
+    var f = showFmt[tz] || (showFmt[tz] = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", hour: "numeric", minute: "2-digit" }));
+    return f.format(new Date(ms));
+  }
+  function dateLabel(ms) { return new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }); }
+
+  // ---------- the scheduler ----------
+  function compute() {
+    var P = state.people, W = state.weeks, dur = state.duration;
+    var base = Date.parse(state.startDate + "T00:00:00Z");
+    if (isNaN(base)) base = Date.parse(nextMonday() + "T00:00:00Z");
+    var S = (24 * 60) / STEP, DAY = 864e5, MIN = 6e4;
+
+    // pains[w][s][j]
+    var pains = [];
+    for (var w = 0; w < W; w++) {
+      var row = [];
+      for (var s = 0; s < S; s++) {
+        var ms = base + w * 7 * DAY + s * STEP * MIN;
+        row.push(P.map(function (p) { return pain(ms, p, dur); }));
+      }
+      pains.push(row);
+    }
+    var startOf = function (w, s) { return base + w * 7 * DAY + s * STEP * MIN; };
+
+    // Fixed: the one slot with the lowest total pain over all weeks (ties: lowest worst-person pain)
+    var bestS = 0, bestTot = Infinity, bestMax = Infinity;
+    for (s = 0; s < S; s++) {
+      var per = P.map(function () { return 0; });
+      for (w = 0; w < W; w++) pains[w][s].forEach(function (v, j) { per[j] += v; });
+      var tot = per.reduce(function (a, b) { return a + b; }, 0), mx = Math.max.apply(null, per);
+      if (tot < bestTot || (tot === bestTot && mx < bestMax)) { bestTot = tot; bestMax = mx; bestS = s; }
+    }
+    var fixed = [];
+    for (w = 0; w < W; w++) fixed.push({ ms: startOf(w, bestS), p: pains[w][bestS] });
+
+    // Fair: each week pick the slot that keeps the sum of squared running totals lowest
+    var C = P.map(function () { return 0; }), fair = [], prev = -1;
+    for (w = 0; w < W; w++) {
+      var pick = 0, pickCost = Infinity, pickTot = Infinity, pickMove = Infinity;
+      for (s = 0; s < S; s++) {
+        var pv = pains[w][s], cost = 0, t2 = 0;
+        for (var j = 0; j < P.length; j++) { var c = C[j] + pv[j]; cost += c * c; t2 += pv[j]; }
+        var move = prev < 0 ? 0 : Math.min(Math.abs(s - prev), S - Math.abs(s - prev));
+        if (cost < pickCost || (cost === pickCost && (t2 < pickTot || (t2 === pickTot && move < pickMove)))) {
+          pick = s; pickCost = cost; pickTot = t2; pickMove = move;
+        }
+      }
+      pains[w][pick].forEach(function (v, j) { C[j] += v; });
+      fair.push({ s: pick });
+      prev = pick;
+    }
+
+    // Polish: swap any single week to another slot while that makes the totals more even
+    function score(tot) {
+      var sq = 0, sum = 0, mx = 0;
+      tot.forEach(function (v) { sq += v * v; sum += v; if (v > mx) mx = v; });
+      return mx * 1e6 + sq * 10 + sum;
+    }
+    for (var pass = 0; pass < 6; pass++) {
+      var improved = false;
+      for (w = 0; w < W; w++) {
+        var cur = fair[w].s, curScore = score(C);
+        for (s = 0; s < S; s++) {
+          if (s === cur) continue;
+          var trial = C.map(function (v, j) { return v - pains[w][cur][j] + pains[w][s][j]; });
+          var sc = score(trial);
+          if (sc < curScore) { curScore = sc; C = trial; cur = s; improved = true; }
+        }
+        fair[w].s = cur;
+      }
+      if (!improved) break;
+    }
+    fair = fair.map(function (f, w) { return { ms: startOf(w, f.s), p: pains[w][f.s] }; });
+    return { fixed: fixed, fair: fair };
+  }
+
+  function summarize(plan) {
+    return state.people.map(function (p, j) {
+      var o = { pts: 0, nights: 0, edges: 0 };
+      plan.forEach(function (wk) { var v = wk.p[j]; o.pts += v; if (v === 3) o.nights++; if (v === 1) o.edges++; });
+      return o;
+    });
+  }
+
+  // ---------- rendering ----------
+  function hourOptions(sel) {
+    var out = "";
+    for (var h = 0; h < 24; h++) {
+      var lbl = (h % 12 || 12) + (h < 12 ? " am" : " pm");
+      out += '<option value="' + h + '"' + (h === sel ? " selected" : "") + ">" + lbl + "</option>";
+    }
+    return out;
+  }
+  function zoneOptions(sel) {
+    return ZONES.map(function (z) { return '<option value="' + z[0] + '"' + (z[0] === sel ? " selected" : "") + ">" + z[1] + "</option>"; }).join("");
+  }
+
+  function renderPeople() {
+    var box = $("people"); box.textContent = "";
+    state.people.forEach(function (p, i) {
+      var el = document.createElement("div"); el.className = "person";
+      el.innerHTML =
+        '<div class="fields">' +
+          '<label>Name<input id="p' + i + '-name" data-k="name"></label>' +
+          '<label>City / time zone<select id="p' + i + '-tz" data-k="tz">' + zoneOptions(p.tz) + "</select></label>" +
+        "</div>" +
+        '<button class="remove" type="button" aria-label="Remove person">✕</button>' +
+        '<div class="hours">' +
+          '<label>Work starts<select id="p' + i + '-ws" data-k="ws">' + hourOptions(p.ws) + "</select></label>" +
+          '<label>Work ends<select id="p' + i + '-we" data-k="we">' + hourOptions(p.we) + "</select></label>" +
+        "</div>";
+      el.querySelector('[data-k="name"]').value = p.name;
+      el.querySelectorAll("[data-k]").forEach(function (inp) {
+        inp.addEventListener(inp.tagName === "SELECT" ? "change" : "input", function () {
+          var k = inp.dataset.k; p[k] = (k === "ws" || k === "we") ? +inp.value : inp.value;
+          schedule();
+        });
+      });
+      el.querySelector(".remove").addEventListener("click", function () {
+        if (state.people.length <= 2) { status("A rotation needs at least two people."); return; }
+        state.people.splice(i, 1); renderPeople(); schedule();
+      });
+      box.appendChild(el);
+    });
+  }
+
+  function sky(boxId, plan) {
+    var box = $(boxId); box.textContent = "";
+    box.style.gridTemplateColumns = "minmax(60px, 110px) repeat(" + plan.length + ", minmax(0, 1fr))";
+    state.people.forEach(function (p, j) {
+      var who = document.createElement("div"); who.className = "who"; who.textContent = p.name || "Person " + (j + 1);
+      box.appendChild(who);
+      plan.forEach(function (wk, w) {
+        var c = document.createElement("div"); c.className = "cell c" + wk.p[j];
+        c.title = (p.name || "Person") + ", week " + (w + 1) + ": " + localLabel(wk.ms, p.tz);
+        box.appendChild(c);
+      });
+    });
+  }
+
+  var last = null;
+  function render() {
+    var r = compute(); last = r;
+    var P = state.people, sf = summarize(r.fixed), sr = summarize(r.fair);
+    var worstF = 0, worstR = 0;
+    sf.forEach(function (o, j) { if (o.pts > sf[worstF].pts) worstF = j; });
+    sr.forEach(function (o, j) { if (o.pts > sr[worstR].pts) worstR = j; });
+    var name = function (j) { return P[j].name || "Person " + (j + 1); };
+
+    var maxNightsR = Math.max.apply(null, sr.map(function (o) { return o.nights; }));
+    var hl = $("headline");
+    if (sf[worstF].pts === 0) {
+      hl.innerHTML = "Good news: one time works for everyone, inside work hours. <b>No rotation needed.</b>";
+    } else {
+      hl.textContent = "";
+      hl.append(
+        "With one fixed time, " + name(worstF) + " takes " + sf[worstF].pts + " of the team's " +
+        sf.reduce(function (a, o) { return a + o.pts; }, 0) + " pain points" +
+        (sf[worstF].nights ? ", including " + sf[worstF].nights + " meetings at night. " : ". "));
+      var b = document.createElement("b");
+      b.textContent = "With FairClock, nobody takes more than " + sr[worstR].pts + (maxNightsR ? ", and no one has more than " + maxNightsR + " night meetings." : ".");
+      hl.appendChild(b);
+    }
+    $("mFixed").textContent = sf[worstF].pts + " pts";
+    $("mFixedS").textContent = "worst off: " + name(worstF);
+    $("mFair").textContent = sr[worstR].pts + " pts";
+    $("mFairS").textContent = "worst off: " + name(worstR);
+    $("fixedTime").textContent = "always " + new Date(r.fixed[0].ms).toISOString().slice(11, 16) + " UTC";
+
+    sky("skyFixed", r.fixed);
+    sky("skyFair", r.fair);
+
+    // bars
+    var maxPts = Math.max(1, Math.max.apply(null, sf.concat(sr).map(function (o) { return o.pts; })));
+    var bars = $("bars"); bars.textContent = "";
+    P.forEach(function (p, j) {
+      var row = document.createElement("div"); row.className = "bar-row";
+      var nm = document.createElement("div"); nm.className = "name"; nm.textContent = p.name || "Person " + (j + 1);
+      var pair = document.createElement("div"); pair.className = "bar-pair";
+      [["fixed", sf[j]], ["fair", sr[j]]].forEach(function (b) {
+        var bar = document.createElement("div"); bar.className = "bar " + b[0];
+        var fill = document.createElement("div"); fill.style.width = (b[1].pts / maxPts * 100) + "%";
+        bar.appendChild(fill); pair.appendChild(bar);
+      });
+      var note = document.createElement("div"); note.className = "bar-note";
+      note.textContent = sf[j].pts + " → " + sr[j].pts + " pts · nights " + sf[j].nights + " → " + sr[j].nights;
+      row.append(nm, pair, note);
+      bars.appendChild(row);
+    });
+
+    // table
+    var t = $("schedule"); t.textContent = "";
+    var thead = document.createElement("thead"), hr = document.createElement("tr");
+    ["Week", "UTC"].concat(P.map(function (p, j) { return (p.name || "Person " + (j + 1)) + " · " + zoneLabel(p.tz); }))
+      .forEach(function (h) { var th = document.createElement("th"); th.textContent = h; hr.appendChild(th); });
+    thead.appendChild(hr); t.appendChild(thead);
+    var tb = document.createElement("tbody");
+    r.fair.forEach(function (wk, w) {
+      var tr = document.createElement("tr");
+      var a = document.createElement("td"); a.className = "wk"; a.textContent = (w + 1) + " · " + dateLabel(wk.ms); tr.appendChild(a);
+      var u = document.createElement("td"); u.className = "mono"; u.textContent = new Date(wk.ms).toISOString().slice(11, 16); tr.appendChild(u);
+      P.forEach(function (p, j) {
+        var td = document.createElement("td"), chip = document.createElement("span");
+        chip.className = "chip c" + wk.p[j]; chip.textContent = localLabel(wk.ms, p.tz);
+        td.appendChild(chip); tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+    save();
+  }
+
+  var timer = null;
+  function schedule() { clearTimeout(timer); timer = setTimeout(render, 120); }
+  function status(msg) { $("status").textContent = msg; clearTimeout(status.t); status.t = setTimeout(function () { $("status").textContent = ""; }, 5000); }
+
+  // ---------- controls ----------
+  function fillSettings() {
+    $("duration").value = String(state.duration);
+    $("weeks").value = String(state.weeks);
+    $("startDate").value = state.startDate;
+  }
+  $("duration").addEventListener("change", function () { state.duration = +this.value; schedule(); });
+  $("weeks").addEventListener("change", function () { state.weeks = +this.value; schedule(); });
+  $("startDate").addEventListener("change", function () { if (this.value) { state.startDate = this.value; schedule(); } });
+  $("addPerson").addEventListener("click", function () {
+    if (state.people.length >= 12) { status("FairClock handles up to 12 people."); return; }
+    state.people.push({ name: "", tz: myZone, ws: 9, we: 17 });
+    renderPeople(); schedule();
+    var inputs = document.querySelectorAll('#people [data-k="name"]'); inputs[inputs.length - 1].focus();
+  });
+  $("resetBtn").addEventListener("click", function () { state = example(); fillSettings(); renderPeople(); render(); status("Example team loaded."); });
+
+  function copy(text, okMsg) {
+    function fallback() {
+      var ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); status(okMsg); } catch (e) { status("Couldn't copy automatically. Select the table and copy it by hand."); }
+      ta.remove();
+    }
+    try { navigator.clipboard.writeText(text).then(function () { status(okMsg); }, fallback); } catch (e) { fallback(); }
+  }
+
+  $("copyText").addEventListener("click", function () {
+    if (!last) return;
+    var lines = ["Team meeting rotation (made with FairClock)", ""];
+    last.fair.forEach(function (wk, w) {
+      lines.push("Week " + (w + 1) + " (" + dateLabel(wk.ms) + "):");
+      state.people.forEach(function (p, j) { lines.push("  " + (p.name || "Person " + (j + 1)) + ": " + localLabel(wk.ms, p.tz)); });
+    });
+    copy(lines.join("\n"), "Schedule copied. Paste it into Slack, email or WhatsApp.");
+  });
+
+  var linkBtn = $("copyLink");
+  if (linkBtn) linkBtn.addEventListener("click", function () {
+    var enc = btoa(unescape(encodeURIComponent(JSON.stringify(state)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    copy(location.href.split("#")[0] + "#team=" + enc, "Team link copied. Anyone who opens it sees this exact schedule.");
+  });
+
+  var icsBtn = $("downloadIcs");
+  if (icsBtn) icsBtn.addEventListener("click", function () {
+    if (!last) return;
+    var stamp = function (ms) { return new Date(ms).toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z"; };
+    var out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//FairClock//EN", "CALSCALE:GREGORIAN"];
+    last.fair.forEach(function (wk, w) {
+      out.push("BEGIN:VEVENT", "UID:fairclock-" + wk.ms + "-" + w + "@fairclock", "DTSTAMP:" + stamp(Date.now()),
+        "DTSTART:" + stamp(wk.ms), "DTEND:" + stamp(wk.ms + state.duration * 6e4),
+        "SUMMARY:Team meeting (FairClock week " + (w + 1) + ")", "END:VEVENT");
+    });
+    out.push("END:VCALENDAR");
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([out.join("\r\n")], { type: "text/calendar" }));
+    a.download = "fairclock-schedule.ics"; document.body.appendChild(a); a.click(); a.remove();
+    status("Calendar file downloaded. Open it to add all " + last.fair.length + " meetings.");
+  });
+
+  fillSettings();
+  renderPeople();
+  render();
+})();
+</script>
+</body>
+</html>
